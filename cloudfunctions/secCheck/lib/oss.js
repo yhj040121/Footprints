@@ -23,6 +23,7 @@ function ossClient() {
     accessKeyId: ENV.OSS_AK_ID,
     accessKeySecret: ENV.OSS_AK_SECRET,
     bucket: ENV.OSS_BUCKET,
+    secure: true, // S7-R2：签名 URL 用 https（Node 云函数侧 https 客户端拒绝 http 协议）
   });
 }
 

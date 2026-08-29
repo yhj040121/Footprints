@@ -158,8 +158,9 @@ async function checkImageSync(buffer, openid) {
 
 /** 下载签名 URL 内容为 Buffer（10s 超时；非 200 → throw） */
 function fetchBuffer(url, timeoutMs = 10000) {
+  const u = String(url).replace(/^http:\/\//, 'https://'); // 签名不含协议，强制 https（S7-R2）
   return new Promise((resolve, reject) => {
-    const req = https.get(url, (res2) => {
+    const req = https.get(u, (res2) => {
       if (res2.statusCode !== 200) { res2.resume(); return reject(new Error('HTTP ' + res2.statusCode)); }
       const chunks = [];
       res2.on('data', (c) => chunks.push(c));

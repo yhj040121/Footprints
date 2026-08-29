@@ -15,9 +15,10 @@ const { UUID_RE } = require('../lib/constants');
 const { ossClient } = require('../lib/oss');
 const { checkImageSync, fetchBuffer } = require('../lib/security');
 
-/** 落审核任务对象（S7-R2：同步/异步两路共用） */
-async function writeTaskRow(client, photoId, openid, status, traceId) {
+/** 落审核任务对象（S7-R2：同步/异步两路共用；err 仅调试用，S7 验收后移除） */
+async function writeTaskRow(client, photoId, openid, status, traceId, err) {
   const task = { photoId, openid, status, traceId: traceId || null, createdAt: Date.now() };
+  if (err) task.err = String(err).slice(0, 300);
   await client.put(`sec-check/task/${photoId}.json`, Buffer.from(JSON.stringify(task), 'utf8'), {
     headers: { 'Content-Type': 'application/json' },
   });
@@ -79,11 +80,11 @@ async function handleImageSubmit(event, openid) {
     }
     console.error('[secCheck.imageSubmit] resized buffer still >1MB, fallback to async');
   } catch (e) {
-    if (e instanceof BizError && e.code === 2004) {
-      console.error('[secCheck.imageSubmit] sync imgSecCheck API error, fallback to async:', e);
-    } else {
-      console.error('[secCheck.imageSubmit] sync audit failed, fallback to async:', e);
-    }
+    // S7-R2 调试：同步失败直接返回错误（不再回退异步），失败原因写入任务便于 imagePoll 读取
+    const why = (e && (e.errMsg || e.message)) || String(e);
+    console.error('[secCheck.imageSubmit] sync audit failed:', why);
+    await writeTaskRow(client, photoId, openid, 'error', null, 'SYNC_FAIL: ' + why);
+    return ok({ checkId: photoId, status: 'error', err: 'SYNC_FAIL: ' + why });
   }
 
   // 3a. 10 分钟签名 URL 供 mediaCheckAsync 拉取（受审对象 = 原图本体；异步兜底路径）
@@ -146,7 +147,9 @@ async function handleImagePoll(event, openid) {
         const task = JSON.parse(obj.content.toString('utf8'));
         if (!task || task.openid !== openid) return { checkId, status: 'error' }; // 非本会话提交 → 不泄露他人状态
         const s = task.status;
-        return { checkId, status: ['pending', 'pass', 'reject', 'error'].includes(s) ? s : 'pending' };
+        const r2 = { checkId, status: ['pending', 'pass', 'reject', 'error'].includes(s) ? s : 'pending' };
+        if (task.err) r2.err = task.err; // S7-R2 调试透出，验收后移除
+        return r2;
       } catch (e) {
         return { checkId, status: 'error' }; // 无审核记录（未提交过/已过期清理）
       }
