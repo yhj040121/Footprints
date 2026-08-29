@@ -2,7 +2,8 @@
 
 .page {
   min-height: 100vh;
-  padding: var(--space-4) var(--space-4) var(--space-8);
+  /* 底部留出固定 custom-tab-bar（100rpx）+ 安全区高度，否则保存按钮永远压在 tab bar 下滚不出来 */
+  padding: var(--space-4) var(--space-4) calc(200rpx + env(safe-area-inset-bottom));
 }
 
 .ph {
