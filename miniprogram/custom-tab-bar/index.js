@@ -2,11 +2,11 @@ Component({
   data: {
     selected: 0,
     list: [
-      { pagePath: '/pages/timeline/timeline', text: '时间线', icon: '☰' },
-      { pagePath: '/pages/calendar/calendar', text: '日历', icon: '▦' },
-      { pagePath: '/pages/add/add', text: '记录', icon: '', isCenter: true },
-      { pagePath: '/pages/map/map', text: '地图', icon: '◎' },
-      { pagePath: '/pages/mine/mine', text: '我的', icon: '◡' }
+      { pagePath: '/pages/timeline/timeline', text: '时间线', icon: '/assets/icons/timeline.png', iconActive: '/assets/icons/timeline-active.png' },
+      { pagePath: '/pages/calendar/calendar', text: '日历', icon: '/assets/icons/calendar.png', iconActive: '/assets/icons/calendar-active.png' },
+      { pagePath: '/pages/add/add', text: '记录', icon: '', iconActive: '', isCenter: true },
+      { pagePath: '/pages/map/map', text: '地图', icon: '/assets/icons/map.png', iconActive: '/assets/icons/map-active.png' },
+      { pagePath: '/pages/mine/mine', text: '我的', icon: '/assets/icons/mine.png', iconActive: '/assets/icons/mine-active.png' }
     ]
   },
 

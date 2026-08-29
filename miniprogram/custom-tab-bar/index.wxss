@@ -31,9 +31,9 @@
   font-weight: 500;
 }
 
-.tab-icon {
-  font-size: 36rpx;
-  line-height: 1.2;
+.tab-icon-img {
+  width: 44rpx;
+  height: 44rpx;
 }
 
 .tab-text {

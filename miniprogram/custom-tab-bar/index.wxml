@@ -13,7 +13,7 @@
       <text class="tab-text tab-text--center">{{item.text}}</text>
     </view>
     <block wx:else>
-      <text class="tab-icon">{{item.icon}}</text>
+      <image class="tab-icon-img" src="{{index === selected ? item.iconActive : item.icon}}" mode="aspectFit" />
       <text class="tab-text">{{item.text}}</text>
     </block>
   </view>
