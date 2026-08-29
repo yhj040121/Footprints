@@ -82,8 +82,7 @@ module.exports = {
             delete pending[r.checkId];
           }
         });
-        const left = Object.keys(pending).length;
-        if (left) this.setData({ saveText: '图片检测中，剩 ' + left + ' 张…' });
+        // S7-R4：审核过程无感知，不再更新「检测中剩 N 张」等阶段性文案
       }
     } catch (err) {
       // 轮询中断（阶段超时/网络/取消）：仍 pending 的照片打回 uploaded，不留卡在 checking 的残留态

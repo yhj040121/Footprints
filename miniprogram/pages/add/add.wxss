@@ -145,6 +145,11 @@
   color: #8C3B2E;
   font-size: var(--text-xs);
 }
+/* 失焦预审轻提示（S7-R4 无感知审核：浅色小字，不阻断输入） */
+.field-hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
 .loc-status {
   flex: 1;
   min-width: 0;
@@ -189,6 +194,13 @@
 }
 .tag-custom {
   border-style: dashed;
+}
+/* 选满 3 个后未选标签置灰（仍可点击，点击给轻提示，S7-R4） */
+.tag--full {
+  opacity: 0.45;
+}
+.tag-error {
+  margin-top: var(--space-2);
 }
 
 /* ---------- 保存按钮 ---------- */

@@ -65,10 +65,9 @@ module.exports = {
   // wx.uploadFile 原图直传隔离区（进度 n/9）→ imageSubmit(photoId)（对隔离区对象本体送审，不再压缩/传 base64）
   // → imagePoll → commitSave（photos 只带 photoId，不传 key，travel key 由服务端从绑定对象解析）
   async runSave(ctx) {
-    // 1) 文本预检（FR-06：尽早反馈；服务端 commit 会终审，不信任前端结果）
+    // 1) 文本预检（FR-06：服务端 commit 会终审，不信任前端结果；S7-R4 过程无状态文案）
     const texts = this.textsToCheck();
     if (texts.length) {
-      this.setData({ saveText: '文本检测中…' });
       await request.callFunction('secCheck', { action: 'text', texts });
       this.throwIfCancelled(ctx);
     }
@@ -88,7 +87,7 @@ module.exports = {
       !p.isOld && (p.status === 'uploaded' || p.status === 'checking')
     );
     if (toCheck.length) {
-      this.setData({ saveText: '图片检测中…' });
+      // S7-R4：图片审核过程无感知——不切换「检测中」文案，保持上传 n/n 的单一指示直至提交
       const stageStartAt = await this.submitReviews(toCheck, ctx);
       await this.pollReviews(toCheck, ctx, stageStartAt);
     }

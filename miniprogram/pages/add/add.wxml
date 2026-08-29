@@ -14,9 +14,8 @@
       <image class="photo-img" src="{{item.url}}" mode="aspectFill" wx:if="{{item.url}}" />
       <view class="photo-img photo-img--empty" wx:else></view>
 
-      <!-- 状态遮罩 -->
-      <view wx:if="{{item.status === 'checking'}}" class="photo-mask">检测中</view>
-      <view wx:elif="{{item.status === 'uploading'}}" class="photo-mask">{{item.progress}}%</view>
+      <!-- 状态遮罩（S7-R4：审核过程无感知，checking 不再显示「检测中」文案） -->
+      <view wx:if="{{item.status === 'uploading'}}" class="photo-mask">{{item.progress}}%</view>
       <view wx:elif="{{item.status === 'review-failed'}}" class="photo-mask photo-mask--bad">未通过</view>
       <view wx:elif="{{item.status === 'upload-failed'}}" class="photo-mask photo-mask--bad" catchtap="onPhotoRetry" data-uid="{{item.uid}}">失败 · 重试</view>
 
@@ -55,12 +54,14 @@
         placeholder="在哪里"
         placeholder-class="ph"
         bindinput="onPlaceInput"
+        bindblur="onPlaceBlur"
         disabled="{{saving}}"
       />
     </view>
     <view class="field-row field-row--loc">
       <view class="loc-status">
         <text wx:if="{{hasCoord}}" class="fp-hint">已获取坐标，保存后上地图</text>
+        <text wx:elif="{{placeHint}}" class="field-hint">{{placeHint}}</text>
         <text wx:elif="{{placeError}}" class="field-error">{{placeError}}</text>
       </view>
       <button class="fp-btn-plain loc-btn" bindtap="onGetLocation" disabled="{{saving}}">获取当前位置</button>
@@ -77,21 +78,23 @@
       placeholder="记录此刻的心境与风景…"
       placeholder-class="ph"
       bindinput="onNoteInput"
+      bindblur="onNoteBlur"
       disabled="{{saving}}"
       auto-height
     />
     <view class="note-foot">
       <text wx:if="{{noteError}}" class="field-error">{{noteError}}</text>
+      <text wx:elif="{{noteHint}}" class="field-hint">{{noteHint}}</text>
       <text class="note-count">{{noteLen}}/{{maxNoteLen}}</text>
     </view>
   </view>
 
-  <!-- 标签（FR-03：预设 6 + 自定义先审后写，≤10 个） -->
+  <!-- 标签（S7-R4：全部自定义、无预设；≤3 个、单个 ≤6 字；编辑存量旧标签原样保留可删） -->
   <view class="tags">
     <view
       wx:for="{{allTags}}"
       wx:key="*this"
-      class="fp-chip tag {{selectedTags.indexOf(item) >= 0 ? 'fp-chip--active' : ''}}"
+      class="fp-chip tag {{selectedTags.indexOf(item) >= 0 ? 'fp-chip--active' : (selectedTags.length >= maxTags ? 'tag--full' : '')}}"
       data-tag="{{item}}"
       bindtap="onTagToggle"
     >{{item}}</view>
@@ -103,26 +106,25 @@
     {{isEdit ? '保存修改' : '保存'}}
   </button>
 
-  <!-- 自定义标签弹窗（FR-03：回车/确认创建，先审后写） -->
+  <!-- 自定义标签弹窗（S7-R4：回车/确认创建，静默审核——过程无状态文案，失败弹窗内轻提示） -->
   <view wx:if="{{tagModalVisible}}" class="mask" catchtouchmove="noop">
     <view class="panel">
       <view class="panel-title">自定义标签</view>
       <input
         class="panel-input"
         value="{{tagInput}}"
-        maxlength="10"
-        placeholder="最多 10 字"
+        maxlength="{{maxTagLen}}"
+        placeholder="最多 {{maxTagLen}} 字"
         placeholder-class="ph"
         confirm-type="done"
         bindinput="onTagInput"
         bindconfirm="onTagConfirm"
         focus
       />
+      <view wx:if="{{tagError}}" class="field-hint tag-error">{{tagError}}</view>
       <view class="panel-btns">
         <button class="fp-btn-plain panel-btn" bindtap="onTagModalCancel">取消</button>
-        <button class="fp-btn-primary panel-btn" bindtap="onTagConfirm" disabled="{{tagChecking}}">
-          {{tagChecking ? '检测中…' : '确定'}}
-        </button>
+        <button class="fp-btn-primary panel-btn" bindtap="onTagConfirm" disabled="{{tagChecking}}">确定</button>
       </view>
     </view>
   </view>
