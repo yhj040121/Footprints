@@ -257,7 +257,8 @@ Page({
     });
   },
 
-  // §5.4 删除传输异常终态：无应答重发同一 delFootprint 至明确终态；1004 = 已删除成功；3001/9000 可重试
+  // §5.4（S6-R4 细化）删除传输异常终态：无应答重发至明确终态；1004 = 已删除成功；3001/9000 可重试；
+  // 重试耗尽（3 次，间隔 2s）仍无终态 → 回读：不存在 = 已删除；存在/回读失败 = 「结果未确认」+再试一次
   doDelete(id) {
     wx.showLoading({ title: '删除中', mask: true });
     const finish = () => { wx.hideLoading(); };
@@ -266,22 +267,38 @@ Page({
       this.removeFromList(id);
       wx.showToast({ title: '已删除', icon: 'success' });
     };
-    const attempt = (remaining) => {
+    const unconfirmed = () => {
+      finish();
+      wx.showModal({
+        title: '结果未确认',
+        content: '删除结果未确认，请再试一次',
+        confirmText: '再试一次',
+        cancelText: '取消',
+        success: (r) => { if (r.confirm) this.doDelete(id); }
+      });
+    };
+    const reRead = () => {
+      db.getFootprint(id)
+        .then((fp) => (fp ? unconfirmed() : success()))
+        .catch(() => unconfirmed());
+    };
+    const send = (retriesLeft) => {
       request.callFunction('delFootprint', { footprintId: id })
         .then(success)
         .catch((err) => {
-          if (request.isNotFound(err)) { return success(); } // 1004：已删除成功（§0.3 / §5.4）
-          if (err && err.transport && remaining > 1) { // 无应答：重发到终态
-            setTimeout(() => attempt(remaining - 1), 800);
+          if (request.isNotFound(err)) return success(); // 1004：已删除成功（§0.3 / §5.4）
+          if (err && err.transport && retriesLeft > 0) { // 无应答：重发到终态（间隔 2s，最多 3 次）
+            setTimeout(() => send(retriesLeft - 1), 2000);
             return;
           }
+          if (err && err.transport) return reRead(); // 重试耗尽仍无终态 → 回读裁定
           finish();
           let tip = (err && err.message) || '删除失败';
           if (!(err && err.transport) && request.isRetryable(err)) tip += '，请重试';
           wx.showToast({ title: tip, icon: 'none' });
         });
     };
-    attempt(4);
+    send(3); // 初始 1 次 + 至多 3 次重试（每次间隔 2s）
   },
 
   removeFromList(id) {

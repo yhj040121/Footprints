@@ -73,9 +73,23 @@ function textRejected(content) {
 }
 
 const handlers = {
-  // §1.1 login
-  login() {
+  // §1.1 login + S6-R4 action=updateProfile（头像/昵称更新）
+  login(data) {
     const user = store.getUser();
+    if (data && data.action === 'updateProfile') {
+      const patch = {};
+      if (typeof data.avatarUrl === 'string') patch.avatarUrl = data.avatarUrl;
+      if (typeof data.nickname === 'string') patch.nickname = data.nickname;
+      const next = Object.assign({}, user, patch);
+      store.saveUser(next);
+      return ok({
+        profile: {
+          avatarUrl: next.avatarUrl,
+          nickname: next.nickname,
+          customTags: next.customTags || []
+        }
+      });
+    }
     return ok({
       openid: user.openid,
       isNewUser: false,

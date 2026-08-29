@@ -183,29 +183,9 @@ function getProfile() {
   });
 }
 
-// 更新本人头像/昵称/自定义标签；返回最新 profile
-function updateProfile(patch) {
-  if (config.USE_MOCK) {
-    const u = Object.assign({}, store.getUser(), patch);
-    store.saveUser(u);
-    const app = getApp();
-    if (app) app.globalData.profile = { avatarUrl: u.avatarUrl, nickname: u.nickname, customTags: u.customTags || [] };
-    return Promise.resolve(app ? app.globalData.profile : patch);
-  }
-  const app = getApp();
-  return db().collection(USER_COLLECTION).limit(1).get()
-    .then((res) => {
-      const doc = res.data[0];
-      if (!doc) throw new Error('user doc not found');
-      return db().collection(USER_COLLECTION).doc(doc._id).update({ data: patch });
-    })
-    .then(() => getProfile().then((p) => {
-      const merged = Object.assign({}, p, patch);
-      if (app) app.globalData.profile = merged;
-      return merged;
-    }));
-}
-
+// 更新本人头像/昵称/自定义标签：S6-R4 起 user 集合客户端整体 write:false，
+// 头像/昵称走 login action=updateProfile（服务端写，见 mine.js saveProfile），customTags 走 secCheck.text，
+// 客户端不再直写 user 数据库，故此处不再提供 updateProfile。
 module.exports = {
   listFootprintsPage,
   listByMonth,
@@ -213,6 +193,5 @@ module.exports = {
   listWithLocation,
   getFootprint,
   stats,
-  getProfile,
-  updateProfile
+  getProfile
 };

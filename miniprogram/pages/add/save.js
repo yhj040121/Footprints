@@ -164,22 +164,46 @@ module.exports = {
         return db.getFootprint(footprintId).then((fp) => confirm(fp));
       })
       .catch((err) => {
-        // 无应答：重发同一请求直到终态（幂等安全）
-        if (err && err.transport && remaining > 1) return attempt(remaining - 1);
-        if (err && err.transport) return this.onSaveUnconfirmed();
+        // 无应答：重发同一请求直到终态（同值覆盖幂等）
+        if (err && err.transport && remaining > 1) {
+          return new Promise((resolve) => setTimeout(() => resolve(attempt(remaining - 1)), 2000));
+        }
+        // §5.4：edit 重发耗尽 或 回读遇网络异常（err.network）→ 一律「结果未确认」，不得落入「保存失败」
+        if (err && (err.transport || err.network)) return this.onSaveUnconfirmed();
         throw err; // 1004 等由 handleSaveError 分流
       });
     return attempt(4);
   },
 
-  // 回读确认：编辑提交内容与落库记录一致（字段级核对；照片校验数量，新照片 key 由服务端解析无法预知）
+  // 回读确认（§5.4 S6-R4）：提交内容与落库记录一致才展示成功——
+  // date/place/note/lat/lng/tags（含顺序与内容）+ 照片 key 序列（旧保留 key 的相对顺序与数量）
   editMatches(fp, payload, editId) {
     if (!fp || fp._id !== editId) return false;
     if (fp.date !== payload.date) return false;
     if (fp.place !== payload.place) return false;
     if ((fp.note || '') !== (payload.note || '')) return false;
+    // lat/lng 同有同无且数值一致（契约 §0.4）
+    const hasCoord = typeof payload.lat === 'number' && typeof payload.lng === 'number';
+    if (hasCoord) {
+      if (fp.lat !== payload.lat || fp.lng !== payload.lng) return false;
+    } else if (typeof fp.lat === 'number' || typeof fp.lng === 'number') {
+      return false;
+    }
+    // tags 顺序与内容一致
     if (JSON.stringify(fp.tags || []) !== JSON.stringify(payload.tags || [])) return false;
-    if ((fp.photos || []).length !== (payload.photos || []).length) return false;
+    // 照片序列：总数一致 + 旧保留 key 的相对顺序与数量一致（新照片 key 由服务端解析无法预知，只较数量）
+    const dbKeys = (fp.photos || []).map((p) => p.key);
+    const oldKeys = (payload.photos || []).filter((p) => p.key).map((p) => p.key);
+    if (dbKeys.length !== payload.photos.length) return false;
+    if (oldKeys.length) {
+      const oldSet = {};
+      oldKeys.forEach((k) => { oldSet[k] = true; });
+      const dbOldSeq = dbKeys.filter((k) => oldSet[k]);
+      if (dbOldSeq.length !== oldKeys.length) return false;
+      for (let i = 0; i < oldKeys.length; i++) {
+        if (dbOldSeq[i] !== oldKeys[i]) return false;
+      }
+    }
     return true;
   },
 

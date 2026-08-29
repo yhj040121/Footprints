@@ -53,17 +53,27 @@ Page({
 
   // ---------- profile (FR-14 ①) ----------
 
+  // S6-R4：user 集合客户端整体 write:false，头像/昵称改调 login action=updateProfile（服务端写），
+  // 客户端不得直写 user 数据库；成功后用返回的 profile 刷新本地展示（同步 app.globalData.profile）
+  saveProfile(patch) {
+    return request.callFunction('login', Object.assign({ action: 'updateProfile' }, patch))
+      .then((data) => {
+        const profile = (data && data.profile) || {};
+        const app = getApp();
+        if (app) app.globalData.profile = Object.assign({}, app.globalData.profile || {}, profile);
+        return profile;
+      });
+  },
+
   // 官方头像填写能力：chooseAvatar 返回临时头像地址，无授权弹窗。
-  // 临时路径杀进程即失效 → 压缩转 base64 dataURL（≤64KB，超限继续降质）再写 user.avatarUrl，
+  // 临时路径杀进程即失效 → 压缩转 base64 dataURL（≤64KB，超限继续降质）再走 login.updateProfile，
   // 保证杀进程后可持久显示（FR-14 验收 2 / 契约 §2.1 S6 修正）
   onChooseAvatar(e) {
     const tempPath = e.detail && e.detail.avatarUrl;
     if (!tempPath) return;
     imageUtil.createAvatarDataUrl(this, 'avatarCanvas', tempPath)
-      .then((dataUrl) => {
-        this.setData({ 'profile.avatarUrl': dataUrl });
-        return db.updateProfile({ avatarUrl: dataUrl });
-      })
+      .then((dataUrl) => this.saveProfile({ avatarUrl: dataUrl }))
+      .then((profile) => this.setData({ profile: Object.assign({}, this.data.profile, profile) }))
       .catch(() => {
         wx.showToast({ title: '头像保存失败，请重试', icon: 'none' });
       });
@@ -77,11 +87,14 @@ Page({
       this.setData({ nickname: current });
       return;
     }
-    db.updateProfile({ nickname: value })
-      .then((p) => this.setData({ profile: p, nickname: p.nickname || '' }))
-      .catch(() => {
+    this.saveProfile({ nickname: value })
+      .then((profile) => this.setData({
+        profile: Object.assign({}, this.data.profile, profile),
+        nickname: (profile && profile.nickname) || ''
+      }))
+      .catch((err) => {
         this.setData({ nickname: current });
-        wx.showToast({ title: '昵称保存失败，请重试', icon: 'none' });
+        wx.showToast({ title: ((err && err.message) || '昵称保存失败') + '，请重试', icon: 'none' });
       });
   },
 
