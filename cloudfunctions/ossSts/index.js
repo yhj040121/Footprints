@@ -94,6 +94,7 @@ function ossClient() {
     accessKeyId: ENV.OSS_AK_ID,
     accessKeySecret: ENV.OSS_AK_SECRET,
     bucket: ENV.OSS_BUCKET,
+    secure: true, // S7：签名 URL 用 https（与 secCheck/lib/oss.js 同口径）
   });
 }
 
