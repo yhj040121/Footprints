@@ -43,6 +43,7 @@
 /* 中央凸出「＋」：按钮浮出栏顶，文字落栏内 */
 .tab-center {
   position: relative;
+  width: 100%; /* 父级 align-items:center 会把无宽子项收缩为 0，文字被挤成竖排——显式撑满 */
   height: 100rpx;
 }
 
