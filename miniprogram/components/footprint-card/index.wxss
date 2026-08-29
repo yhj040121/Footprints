@@ -2,6 +2,10 @@
   display: flex;
   gap: 24rpx;
   padding: 24rpx;
+  /* 组件样式隔离：app.wxss 进不来，卡片表面在此自写（否则透明卡会透出左滑操作层） */
+  background: #FFFEF9;
+  border: 1rpx solid #E2DACA;
+  border-radius: 24rpx;
 }
 
 .cover {
@@ -79,5 +83,11 @@
   min-height: 44rpx;
   padding: 2rpx 18rpx;
   font-size: 22rpx;
-  border-color: #E2DACA;
+  /* .fp-chip 全局样式被隔离，chip 表面在此自写 */
+  border: 1rpx solid #E2DACA;
+  border-radius: 999rpx;
+  background: #F6F1E5;
+  color: #6E685C;
+  display: inline-flex;
+  align-items: center;
 }

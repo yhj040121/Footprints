@@ -1,4 +1,6 @@
-/* 5 槽自定义 tabBar：中央凸出大按钮 */
+/* 5 槽自定义 tabBar：中央凸出大按钮
+   安全区只在容器上垫一次（真机 bug 修复：原 item 内重复垫安全区，
+   110rpx 定高被安全区吃掉后内容只剩 ~42rpx，图标文字被裁切） */
 .tab-bar {
   position: fixed;
   left: 0;
@@ -6,8 +8,6 @@
   bottom: 0;
   display: flex;
   align-items: stretch;
-  height: 110rpx;
-  padding-bottom: constant(safe-area-inset-bottom);
   padding-bottom: env(safe-area-inset-bottom);
   background: #FDFBF5;
   border-top: 1rpx solid #E2DACA;
@@ -16,13 +16,13 @@
 
 .tab-item {
   flex: 1;
+  height: 100rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4rpx;
+  gap: 6rpx;
   color: #9A937F;
-  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .tab-item--active {
@@ -40,30 +40,33 @@
   line-height: 1.2;
 }
 
-/* 中央凸出「＋」大按钮 */
+/* 中央凸出「＋」：按钮浮出栏顶，文字落栏内 */
 .tab-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  height: 100%;
+  position: relative;
+  height: 100rpx;
 }
 
 .tab-center-btn {
+  position: absolute;
+  top: -40rpx;
+  left: 50%;
+  transform: translateX(-50%);
   width: 96rpx;
   height: 96rpx;
-  margin-top: -48rpx;
   border-radius: 50%;
   background: #35322C;
   color: #F8F4EA;
-  font-size: 56rpx;
-  line-height: 92rpx;
+  font-size: 52rpx;
+  line-height: 88rpx;
   text-align: center;
-  border: 6rpx solid #FDFBF5;
-  box-shadow: none;
+  border: 4rpx solid #FDFBF5;
 }
 
 .tab-text--center {
-  margin-top: 4rpx;
+  position: absolute;
+  bottom: 8rpx;
+  left: 0;
+  right: 0;
+  text-align: center;
   color: #9A937F;
 }

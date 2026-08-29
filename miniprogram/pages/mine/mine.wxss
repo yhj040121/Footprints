@@ -4,7 +4,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: var(--space-5) var(--space-4) 0;
+  padding: var(--space-5) var(--space-4) calc(180rpx + env(safe-area-inset-bottom));
 }
 
 /* ---------- 头像与昵称 ---------- */

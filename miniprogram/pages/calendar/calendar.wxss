@@ -1,7 +1,8 @@
 /* FR-09 日历视图：水墨暖纸色 token，无阴影 */
 
 .page {
-  padding-bottom: var(--space-6);
+  /* 底部留白避开固定 tabBar */
+  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
 }
 
 /* 顶部：年月 + 左右切换 */
