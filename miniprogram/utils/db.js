@@ -1,4 +1,7 @@
 // 数据访问层：足迹/用户资料的「读」与 user 本人资料的「写」（契约 §0.1：读走 db SDK 直连，footprint 写一律走云函数）
+// S7-R1：客户端所有查询显式携带 _openid:'{openid}'——自定义安全规则要求「查询条件是规则的子集」，
+//        预设权限会自动注入 _openid 而自定义规则不会（官方《数据库安全规则》升级指引），
+//        缺 _openid 的查询在自定义规则下会 -502003。此修复同时兼容预设权限（恒等过滤，无副作用）。
 // USE_MOCK=true 时全部路由到 utils/mock/ 本地存储，联调切 false 即用真实云数据库，页面代码零改动。
 const config = require('./config');
 const store = require('./mock/store');
@@ -45,6 +48,7 @@ function listFootprintsPage(skip, limit) {
     });
   }
   return db().collection(COLLECTION)
+    .where({ _openid: '{openid}' })
     .orderBy('date', 'desc')
     .orderBy('createdAt', 'desc')
     .skip(skip)
@@ -69,7 +73,7 @@ function listByRange(startDate, endDate) {
   const _ = db().command;
   const all = [];
   const step = () => db().collection(COLLECTION)
-    .where({ date: _.gte(startDate).and(_.lte(endDate)) })
+    .where({ _openid: '{openid}', date: _.gte(startDate).and(_.lte(endDate)) })
     .orderBy('date', 'desc')
     .orderBy('createdAt', 'desc')
     .skip(all.length)
@@ -95,7 +99,7 @@ function listWithLocation() {
   const _ = db().command;
   const all = [];
   const step = () => db().collection(COLLECTION)
-    .where({ lat: _.exists(true) })
+    .where({ _openid: '{openid}', lat: _.exists(true) })
     .field({ date: true, place: true, lat: true, lng: true, note: true, photos: true, createdAt: true })
     .orderBy('date', 'asc')
     .orderBy('createdAt', 'asc')
@@ -112,7 +116,7 @@ function listWithLocation() {
   );
 }
 
-// 详情：按 id 取单条（安全规则兜底非本人返回空）
+// 详情：按 id 取单条（S7-R1：doc().get() 在自定义规则下不满足子集检查，改 where({_id, _openid})）
 // S6-R3：区分「记录不存在/无权限」与「网络/服务端异常」——前者返回 null，后者抛 { network:true }，
 // 供详情页断网时展示「网络错误」而非误报「记录不存在」
 function getFootprint(id) {
@@ -120,8 +124,8 @@ function getFootprint(id) {
     ensureMockSeed();
     return Promise.resolve(store.getFootprints().find((f) => f._id === id) || null);
   }
-  return db().collection(COLLECTION).doc(id).get()
-    .then((res) => res.data || null)
+  return db().collection(COLLECTION).where({ _id: id, _openid: '{openid}' }).limit(1).get()
+    .then((res) => (res.data && res.data[0]) || null)
     .catch((err) => {
       const msg = (err && err.errMsg) || '';
       if (/not exist|not found|does not exist|permission|deny|invalid/i.test(msg)) return null;
@@ -147,6 +151,7 @@ function stats() {
   // 循环分页拉 date/photos 本地累计（契约 §2.3）
   const all = [];
   const step = () => db().collection(COLLECTION)
+    .where({ _openid: '{openid}' })
     .field({ date: true, photos: true })
     .skip(all.length)
     .limit(20)
@@ -177,7 +182,7 @@ function getProfile() {
     const u = store.getUser();
     return Promise.resolve({ avatarUrl: u.avatarUrl, nickname: u.nickname, customTags: u.customTags || [] });
   }
-  return db().collection(USER_COLLECTION).limit(1).get().then((res) => {
+  return db().collection(USER_COLLECTION).where({ _openid: '{openid}' }).limit(1).get().then((res) => {
     const u = res.data[0] || {};
     return { avatarUrl: u.avatarUrl || null, nickname: u.nickname || null, customTags: u.customTags || [] };
   });
