@@ -26,35 +26,42 @@ async function getUserDoc(openid) {
 }
 
 /**
- * S6-R3：服务端原子追加 customTags。
- * 校验：单个 ≤10 字（超 → 1001）、去重（当前已有/批内重复跳过）、总数 ≤10 个（超 → 1001）。
- * 追加用 addToSet（原子去重）；返回追加后的完整数组。
+ * S6-R4：服务端原子追加 customTags（数据库事务 runTransaction）。
+ * 事务内：重读 user.customTags → 合并去重 → 校验单个 ≤10 字、总数 ≤10 个 → 一次 update 写回；
+ * 任一校验失败/异常整体回滚。返回追加后的完整数组。
  * @param {string} openid
  * @param {string[]} tagsToAdd 已审核通过的 customTag 内容（可能含重复）
  * @returns {Promise<string[]>}
  */
 async function appendCustomTags(openid, tagsToAdd) {
-  const user = await getUserDoc(openid);
-  if (!user) throw new BizError(9000); // 无 user 文档（login 未建档）→ 系统异常
-  const current = Array.isArray(user.customTags) ? [...user.customTags] : []; // 拷贝，防引用共享
+  const db = getDb();
+  const merged = await db.runTransaction(async (transaction) => {
+    // 事务内重读（并发安全）
+    let u = null;
+    try {
+      const got = await transaction.collection('user').doc(openid).get();
+      u = got && got.data ? got.data : null;
+    } catch (e) {
+      u = null;
+    }
+    if (!u) throw new BizError(9000); // 无 user 文档（login 未建档）→ 系统异常（回滚）
 
-  const seen = new Set(current);
-  const toAppend = [];
-  for (const t of tagsToAdd) {
-    if (t.length > 10) throw new BizError(1001); // 单个 ≤10 字（§2.1）
-    if (seen.has(t)) continue; // 去重（当前已有或本批已加）
-    seen.add(t);
-    toAppend.push(t);
-  }
-  if (current.length + toAppend.length > 10) throw new BizError(1001); // 总数 ≤10
+    const current = Array.isArray(u.customTags) ? u.customTags : [];
+    const seen = new Set(current);
+    const result = [...current];
+    for (const t of tagsToAdd) {
+      if (t.length > 10) throw new BizError(1001); // 单个 ≤10 字（§2.1）
+      if (seen.has(t)) continue; // 去重（当前已有或本批已加）
+      seen.add(t);
+      result.push(t);
+    }
+    if (result.length > 10) throw new BizError(1001); // 总数 ≤10
 
-  const cmd = getDb().command;
-  for (const t of toAppend) {
-    await getDb().collection('user').doc(openid).update({
-      data: { customTags: cmd.addToSet(t) }, // addToSet：原子去重追加
-    });
-  }
-  return [...current, ...toAppend];
+    // 一次 update 写回（事务内）
+    await transaction.collection('user').doc(openid).update({ data: { customTags: result } });
+    return result;
+  });
+  return merged;
 }
 
 async function handleText(event, openid) {

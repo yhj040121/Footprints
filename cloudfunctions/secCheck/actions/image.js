@@ -99,6 +99,8 @@ async function handleImagePoll(event, openid) {
   if (!Array.isArray(checkIds) || checkIds.length < 1 || checkIds.length > 9) throw new BizError(1001);
   // S6 修正：checkId 须为本会话提交过的 photoId，格式校验收紧为 UUID v4
   if (checkIds.some((id) => typeof id !== 'string' || !UUID_RE.test(id))) throw new BizError(1001);
+  // S6-R4：入参去重——checkIds 重复 → 1001
+  if (new Set(checkIds).size !== checkIds.length) throw new BizError(1001);
 
   const client = ossClient();
   const results = await Promise.all(

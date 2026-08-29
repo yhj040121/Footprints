@@ -210,6 +210,18 @@ async function handleCommitEdit(event, openid) {
   const client = ossClient();
   const oldKeys = (fp.photos || []).map((p) => p.key).filter((k) => typeof k === 'string');
 
+  // S6-R4：变更文本重审（先于照片，对齐契约 §1.2 顺序）——与原文比对，未变文本跳过；
+  // 预设标签/日期不重审（FR-13）
+  const diffItems = [];
+  if (input.place !== (fp.place || '')) diffItems.push({ field: 'place', content: input.place });
+  if (input.note !== (fp.note || '')) diffItems.push({ field: 'note', content: input.note });
+  const oldTags = new Set(fp.tags || []);
+  for (const t of input.tags) {
+    if (PRESET_TAGS.includes(t) || oldTags.has(t)) continue;
+    diffItems.push({ field: 'customTag', content: t });
+  }
+  await textFinalCheck(diffItems, openid);
+
   // 解析最终照片序列：
   //   旧照片项 { key } —— 须属于该记录，直接保留；
   //   新增/替换照片项 { photoId } —— 三元组校验（S6-R2，只读）→ 得预绑定 travelKey
@@ -243,17 +255,6 @@ async function handleCommitEdit(event, openid) {
   if (removedKeys.length !== expectedRemoved.length || expectedRemoved.some((k) => !removedSet.has(k))) {
     throw new BizError(1001);
   }
-
-  // 变更文本重审：与原文比对，未变文本跳过；预设标签/日期不重审（FR-13）
-  const diffItems = [];
-  if (input.place !== (fp.place || '')) diffItems.push({ field: 'place', content: input.place });
-  if (input.note !== (fp.note || '')) diffItems.push({ field: 'note', content: input.note });
-  const oldTags = new Set(fp.tags || []);
-  for (const t of input.tags) {
-    if (PRESET_TAGS.includes(t) || oldTags.has(t)) continue;
-    diffItems.push({ field: 'customTag', content: t });
-  }
-  await textFinalCheck(diffItems, openid);
 
   // 转正（S6-R2）：CopyObject 新增照片 隔离区 → travel/（同字节；失败 3001，原文档原照片不动）
   if (resolved.length) await promotePhotos(resolved, client);

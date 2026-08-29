@@ -95,16 +95,17 @@ async function validateTags(tags, openid) {
   if (invalid.length) throw new BizError(1001);
 }
 
-/** 读取本人 user.customTags（无 user 文档时按空处理） */
+/** 读取本人 user.customTags（无 user 文档时按空处理；S6-R4：数据库异常 → 9000，不误判 1001） */
 async function getUserCustomTags(openid) {
+  let got;
   try {
-    const got = await getDb().collection('user').where({ openid }).limit(1).get();
-    const u = got.data[0];
-    return Array.isArray(u && u.customTags) ? u.customTags : [];
+    got = await getDb().collection('user').where({ openid }).limit(1).get();
   } catch (e) {
-    console.warn('[secCheck.validate] getUserCustomTags failed:', e);
-    return [];
+    console.error('[secCheck.validate] getUserCustomTags failed:', e);
+    throw new BizError(9000); // S6-R4：DB 异常 → 9000（可重试），仅真实「无标签命中」才走 1001
   }
+  const u = got && got.data && got.data[0];
+  return Array.isArray(u && u.customTags) ? u.customTags : [];
 }
 
 module.exports = { beijingToday, isValidDateString, validateSaveInput, validateTags, getUserCustomTags };

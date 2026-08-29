@@ -9,8 +9,9 @@
  * 3. user 文档显式写 _openid + openid：云函数管理端写入不会自动带 _openid，
  *    而前端后续读写本人 user 文档依赖「仅创建者可读写」（按 _openid 判定）。
  * 4. createdAt 由服务端 serverDate 写入，前端传了也忽略。
+ * 5. S6-R4：action=updateProfile 头像/昵称更新（user 集合客户端 write:false 后的服务端写入口）。
  *
- * 错误码：1002（code 无效/上下文无 openid）、9000（未预期异常）。
+ * 错误码：1001（updateProfile 格式/超限）、1002（code 无效/上下文无 openid）、9000（未预期异常）。
  *
  * 环境变量（仅环境变量描述，绝不写真实值进代码/仓库）：
  *   WX_APPID    微信小程序 AppID（=wx195015715a8e389d，已定可入文档）
@@ -30,6 +31,7 @@ const ENV = {
 };
 
 const CODE_MSG = {
+  1001: '提交内容不完整或格式不正确',
   1002: '登录态失效，请重新进入小程序',
   9000: '系统繁忙，请稍后再试',
 };
@@ -93,6 +95,11 @@ exports.main = async (event) => {
       return fail(1002, CODE_MSG[1002]);
     }
 
+    // S6-R4：action=updateProfile 头像/昵称更新（user 集合客户端 write:false 后的服务端写入口）
+    if (event && event.action === 'updateProfile') {
+      return await handleUpdateProfile(event, openid);
+    }
+
     const userCol = db.collection('user');
     try {
       // 建档：_id = openid，重复调用/并发下唯一约束保证不重复建档
@@ -130,3 +137,61 @@ exports.main = async (event) => {
     return fail(9000, CODE_MSG[9000]);
   }
 };
+
+/**
+ * action = "updateProfile"（S6-R4，契约 §1.1）：头像/昵称更新（FR-14）。
+ * 入参：avatarUrl（base64 dataURL，解码后 ≤64KB，超限 1001）、nickname（1~32 字，去首尾空白）。
+ * 未传/传 null 的字段不动；openid 取自上下文；出参返回更新后的完整 profile。
+ * 错误码：1001（格式/超限）、1002（无 openid）、9000（DB 异常）。
+ */
+async function handleUpdateProfile(event, openid) {
+  const update = {};
+
+  // avatarUrl：base64 dataURL，解码后 ≤64KB
+  if (event.avatarUrl !== undefined && event.avatarUrl !== null) {
+    if (typeof event.avatarUrl !== 'string') return fail(1001, CODE_MSG[1001]);
+    const m = /^data:[^;]+;base64,([A-Za-z0-9+/=]+)$/.exec(event.avatarUrl);
+    if (!m) return fail(1001, CODE_MSG[1001]);
+    let buf;
+    try {
+      buf = Buffer.from(m[1], 'base64');
+    } catch (e) {
+      return fail(1001, CODE_MSG[1001]);
+    }
+    if (!buf.length || buf.length > 64 * 1024) return fail(1001, CODE_MSG[1001]); // ≤64KB
+    update.avatarUrl = event.avatarUrl;
+  }
+
+  // nickname：1~32 字，去首尾空白
+  if (event.nickname !== undefined && event.nickname !== null) {
+    if (typeof event.nickname !== 'string') return fail(1001, CODE_MSG[1001]);
+    const nick = event.nickname.trim();
+    if (nick.length < 1 || nick.length > 32) return fail(1001, CODE_MSG[1001]);
+    update.nickname = nick;
+  }
+
+  if (!Object.keys(update).length) return fail(1001, CODE_MSG[1001]); // 无字段可更新
+
+  try {
+    await db.collection('user').doc(openid).update({ data: update });
+  } catch (e) {
+    console.error('[login.updateProfile] update failed:', e);
+    return fail(9000, CODE_MSG[9000]);
+  }
+
+  // 回读返回完整 profile
+  let u = {};
+  try {
+    const got = await db.collection('user').doc(openid).get();
+    u = (got && got.data) || {};
+  } catch (e) {
+    console.warn('[login.updateProfile] readback failed:', e && e.message);
+  }
+  return ok({
+    profile: {
+      avatarUrl: u.avatarUrl || null,
+      nickname: u.nickname || null,
+      customTags: Array.isArray(u.customTags) ? u.customTags : [],
+    },
+  });
+}

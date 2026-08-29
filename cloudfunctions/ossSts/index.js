@@ -115,6 +115,13 @@ async function handleIssueUpload(event, openid) {
     return { photoId, ext, date };
   });
 
+  // S6-R4：入参去重——items 内 photoId 重复 → 1001
+  const pidSeen = new Set();
+  for (const { photoId } of normalized) {
+    if (pidSeen.has(photoId)) throw new BizError(1001);
+    pidSeen.add(photoId);
+  }
+
   const client = ossClient();
 
   // 1. 逐项解析/生成隔离 key + 预生成 travel key
