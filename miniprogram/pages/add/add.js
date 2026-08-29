@@ -26,19 +26,24 @@ Page(Object.assign({
     dateText: '',
     place: '',
     placeError: '',
+    placeHint: '',         // 失焦预审未通过的浅色轻提示（不阻断，S7-R4 无感知审核）
     hasCoord: false,       // 当前是否持有坐标（lat/lng 存 this，不入渲染层）
     note: '',
     noteLen: 0,
     noteError: '',
+    noteHint: '',          // 同上（备注失焦预审）
     maxNoteLen: constants.MAX_NOTE_LEN,
-    allTags: constants.PRESET_TAGS.slice(), // 预设 + 本人 customTags
+    allTags: [],           // 可选标签 = 本人 customTags ∪ 已选旧标签（编辑存量，S7-R4 预设已移除）
     selectedTags: [],
+    maxTags: constants.MAX_TAGS,
+    maxTagLen: constants.MAX_TAG_LEN,
     photos: [],            // { uid, photoId, tempFilePath, ext, key, url, status, progress, isOld }
     maxPhotos: constants.MAX_PHOTOS,
 
     // 自定义标签弹窗
     tagModalVisible: false,
     tagInput: '',
+    tagError: '',          // 弹窗内轻提示（S7-R4：审核失败不再 toast 打断）
     tagChecking: false,
 
     // 保存进度弹层
@@ -60,6 +65,11 @@ Page(Object.assign({
     this._saveSeq = 0; // 保存轮次 token（save.js：旧轮次回调按 identity 丢弃）
     this._needReset = false;
     this._uploadTaskCount = 0;
+    this._customTags = [];      // 服务端 user.customTags（唯一可选标签来源，S7-R4 无预设）
+    this._placeCheckSeq = 0;    // 失焦预审竞态 token
+    this._noteCheckSeq = 0;
+    this._placeChecked = '';    // 上次预审通过的内容（未变化不重审）
+    this._noteChecked = '';
 
     const today = dateUtil.today();
     this.setData({ today, date: today, dateText: dateUtil.displayDate(today) });
@@ -122,7 +132,7 @@ Page(Object.assign({
   onPlaceInput(e) {
     const place = e.detail.value;
     this.markDirty();
-    const patch = { place, placeError: '' };
+    const patch = { place, placeError: '', placeHint: '' };
     // FR-04：选点回填后手动改写地点文字 → 视为手动输入，清空经纬度
     if (this._lat !== null && place !== this._locatedPlace) {
       this._lat = null;
@@ -133,6 +143,30 @@ Page(Object.assign({
     this.setData(patch);
   },
 
+  // 地点失焦静默预审（S7-R4 无感知审核）：通过无任何表现，未通过仅输入框下浅色小字；
+  // 不阻断填写，最终保存仍由服务端终审（契约 2001 语义不变）
+  onPlaceBlur(e) {
+    const place = (e.detail.value || '').trim();
+    if (!place || place === this._placeChecked) {
+      if (!place) this.setData({ placeHint: '' });
+      return;
+    }
+    const seq = ++this._placeCheckSeq;
+    request.callFunction('secCheck', {
+      action: 'text',
+      texts: [{ field: 'place', content: place }]
+    }).then(() => {
+      if (seq !== this._placeCheckSeq) return;
+      this._placeChecked = place;
+      this.setData({ placeHint: '' });
+    }).catch((err) => {
+      // 仅预审明确「未通过」（2001）才轻提示；接口异常等保持无感知（保存时服务端会拦截并给出原因）
+      if (seq !== this._placeCheckSeq) return;
+      if (err && err.code === 2001) {
+        this.setData({ placeHint: '该地点可能未通过安全检测，保存时可能被拦截' });
+      }
+    });
+  },
   // FR-04：wx.chooseLocation 选点回填；取消/拒授权原样保留
   onGetLocation() {
     wx.chooseLocation({
@@ -166,16 +200,53 @@ Page(Object.assign({
 
   onNoteInput(e) {
     this.markDirty();
-    this.setData({ note: e.detail.value, noteLen: e.detail.value.length, noteError: '' });
+    this.setData({ note: e.detail.value, noteLen: e.detail.value.length, noteError: '', noteHint: '' });
   },
 
-  // ---------- 标签（FR-03） ----------
+  // 备注失焦静默预审（S7-R4）：同地点口径，通过无表现，未通过浅色小字，不弹窗不打断
+  onNoteBlur(e) {
+    const note = e.detail.value || '';
+    if (!note.trim() || note === this._noteChecked) {
+      if (!note.trim()) this.setData({ noteHint: '' });
+      return;
+    }
+    const seq = ++this._noteCheckSeq;
+    request.callFunction('secCheck', {
+      action: 'text',
+      texts: [{ field: 'note', content: note }]
+    }).then(() => {
+      if (seq !== this._noteCheckSeq) return;
+      this._noteChecked = note;
+      this.setData({ noteHint: '' });
+    }).catch((err) => {
+      if (seq !== this._noteCheckSeq) return;
+      if (err && err.code === 2001) {
+        this.setData({ noteHint: '该备注可能未通过安全检测，保存时可能被拦截' });
+      }
+    });
+  },
+
+  // ---------- 标签（FR-03 S7-R4：全部自定义，无预设；≤3 个、单个 ≤6 字） ----------
 
   refreshTags() {
     return db.getProfile().then((p) => {
-      const custom = (p && p.customTags) || [];
-      this.setData({ allTags: constants.PRESET_TAGS.concat(custom) });
+      this._customTags = ((p && p.customTags) || []).slice();
+      this.buildTagOptions();
     }).catch(() => {});
+  },
+
+  // 可选标签 = 本人 customTags ∪ 已选标签（编辑存量记录的旧标签如「徒步」未删时原样可选可保留，
+  // 删除也允许——删除不走审核，S7-R4 编辑兼容）。去重防同一标签渲染两个 chip 导致连动勾选
+  buildTagOptions() {
+    const seen = {};
+    const options = [];
+    this._customTags.concat(this.data.selectedTags).forEach((t) => {
+      if (t && !seen[t]) {
+        seen[t] = true;
+        options.push(t);
+      }
+    });
+    this.setData({ allTags: options });
   },
 
   onTagToggle(e) {
@@ -183,7 +254,7 @@ Page(Object.assign({
     const selected = this.data.selectedTags.slice();
     const idx = selected.indexOf(tag);
     if (idx >= 0) {
-      selected.splice(idx, 1);
+      selected.splice(idx, 1); // 删除不需审核（旧标签同样允许删）
     } else {
       if (selected.length >= constants.MAX_TAGS) {
         wx.showToast({ title: '最多选择 ' + constants.MAX_TAGS + ' 个标签', icon: 'none' });
@@ -200,32 +271,29 @@ Page(Object.assign({
       wx.showToast({ title: '最多选择 ' + constants.MAX_TAGS + ' 个标签', icon: 'none' });
       return;
     }
-    this.setData({ tagModalVisible: true, tagInput: '' });
+    this.setData({ tagModalVisible: true, tagInput: '', tagError: '' });
   },
 
   onTagInput(e) {
-    this.setData({ tagInput: e.detail.value });
+    // 超 6 字直接截断（S7-R4，不再 toast）
+    this.setData({ tagInput: (e.detail.value || '').slice(0, constants.MAX_TAG_LEN), tagError: '' });
   },
 
   onTagModalCancel() {
-    this.setData({ tagModalVisible: false, tagInput: '' });
+    this.setData({ tagModalVisible: false, tagInput: '', tagError: '' });
   },
 
   // 自定义标签：先审后由服务端写入（S6-R3，契约 §1.2 text / FR-03）——
-  // 客户端只调 secCheck.text（field=customTag），通过后服务端原子追加到 user.customTags 并返回完整数组，
-  // 客户端据此刷新本地；不再客户端直写 user.customTags（§2.4 禁写）
+  // 客户端只调 secCheck.text（field=customTag），通过后服务端原子追加到 user.customTags 并返回完整数组。
+  // S7-R4 无感知审核：过程无状态文案，失败只在弹窗内轻提示，无 toast/无跳转
   onTagConfirm() {
     const tag = (this.data.tagInput || '').trim();
     if (!tag) { this.onTagModalCancel(); return; }
-    if (tag.length > constants.MAX_TAG_LEN) {
-      wx.showToast({ title: '单个标签最多 ' + constants.MAX_TAG_LEN + ' 字', icon: 'none' });
-      return;
-    }
     // 去重：已存在则直接选中，不产生重复（FR-03 验收 5）
     if (this.data.allTags.indexOf(tag) >= 0) {
       const selected = this.data.selectedTags.slice();
       if (selected.indexOf(tag) < 0 && selected.length < constants.MAX_TAGS) selected.push(tag);
-      this.setData({ tagModalVisible: false, tagInput: '', selectedTags: selected });
+      this.setData({ tagModalVisible: false, tagInput: '', tagError: '', selectedTags: selected });
       return;
     }
     if (this.data.tagChecking) return;
@@ -234,9 +302,10 @@ Page(Object.assign({
       action: 'text',
       texts: [{ field: 'customTag', content: tag }]
     }).then((data) => {
-      // 用服务端返回的完整 customTags 数组刷新；缺省时回退到本地已加载的非预设标签
-      const custom = (data && data.customTags) ||
-        this.data.allTags.slice(constants.PRESET_TAGS.length);
+      // 用服务端返回的完整 customTags 刷新；兜底并上本次标签，保证「输入 ABC → 可选与已选有且只有 ABC」
+      const custom = ((data && data.customTags) || this._customTags.slice()).slice();
+      if (custom.indexOf(tag) < 0) custom.push(tag);
+      this._customTags = custom;
       const selected = this.data.selectedTags.slice();
       if (selected.indexOf(tag) < 0 && selected.length < constants.MAX_TAGS) selected.push(tag);
       this.markDirty();
@@ -244,12 +313,17 @@ Page(Object.assign({
         tagChecking: false,
         tagModalVisible: false,
         tagInput: '',
-        allTags: constants.PRESET_TAGS.concat(custom),
+        tagError: '',
         selectedTags: selected
       });
+      this.buildTagOptions();
     }).catch((err) => {
-      this.setData({ tagChecking: false });
-      wx.showToast({ title: (err && err.message) || '标签不可用，请换一个', icon: 'none' });
+      this.setData({
+        tagChecking: false,
+        tagError: (err && err.code === 2001)
+          ? '该标签未通过安全检测，请换一个'
+          : ((err && err.message) || '标签暂不可用，请稍后再试')
+      });
     });
   },
 
@@ -339,15 +413,18 @@ Page(Object.assign({
         dateText: dateUtil.displayDate(fp.date),
         place: fp.place,
         placeError: '',
+        placeHint: '',
         hasCoord: this._lat !== null,
         note: fp.note || '',
         noteLen: (fp.note || '').length,
         noteError: '',
+        noteHint: '',
         selectedTags: (fp.tags || []).slice(),
         photos,
         saveError: null
       });
       wx.setNavigationBarTitle({ title: '编辑足迹' });
+      this.buildTagOptions(); // 先同步并集渲染（含旧标签），customTags 随后由 refreshTags 刷新
       this.refreshTags();
       this.signEditThumbs(photos);
     }).catch(() => {
@@ -395,13 +472,18 @@ Page(Object.assign({
       dateText: dateUtil.displayDate(today),
       place: '',
       placeError: '',
+      placeHint: '',
       hasCoord: false,
       note: '',
       noteLen: 0,
       noteError: '',
+      noteHint: '',
       selectedTags: [],
       photos: [],
       saveError: null
     });
+    this._placeChecked = '';
+    this._noteChecked = '';
+    this.buildTagOptions();
   }
 }, review, upload, save));

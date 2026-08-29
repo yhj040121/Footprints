@@ -1,13 +1,10 @@
 // 业务常量（唯一来源：需求文档 + 接口契约 §6 数值定值表）
 module.exports = {
-  // 预设标签（前端常量，需求文档 FR-03）
-  PRESET_TAGS: ['山水', '古镇', '徒步', '晴天', '人文', '初秋'],
-
-  // 表单上限（FR-03）
+  // 表单上限（FR-03；S7-R4 修订：预设标签移除，标签全部用户自定义，≤3 个、单个 ≤6 字）
   MAX_PLACE_LEN: 50,
   MAX_NOTE_LEN: 500,
-  MAX_TAGS: 10,
-  MAX_TAG_LEN: 10,
+  MAX_TAGS: 3,
+  MAX_TAG_LEN: 6,
 
   // 照片（FR-05）
   MAX_PHOTOS: 9,
