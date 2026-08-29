@@ -6,6 +6,7 @@
  * （errCode=0 且 suggest≠pass）才由调用方按 2001 处理。
  */
 const cloud = require('wx-server-sdk');
+const https = require('https');
 const { BizError } = require('./errors');
 
 /**
@@ -124,4 +125,49 @@ async function promotePhotos(resolved, client) {
   }
 }
 
-module.exports = { checkText, textFinalCheck, verifyPhotos, promotePhotos };
+/**
+ * 同步图片审核（S7-R2 降级方案，契约预留）：本环境「消息推送」通道不可用，mediaCheckAsync
+ * 结果无法回投 → 改为同步 imgSecCheck（v1，Buffer ≤1MB，入参传隔离区对象的缩放版本，
+ * 审核内容与原图一致仅尺寸不同）。业务性拒绝以 errCode 87014 为准（抛异常与非抛异常两种形态都处理）；
+ * 其余接口异常 → BizError 2004（调用方回退异步路径或按暂缓处理）。
+ * @returns {Promise<{pass: boolean}>}
+ */
+async function checkImageSync(buffer, openid) {
+  let res;
+  try {
+    res = await cloud.openapi.security.imgSecCheck({
+      media: { contentType: 'image/jpeg', value: buffer },
+    });
+  } catch (e) {
+    if (e && (e.errCode === 87014 || /87014|risky/i.test(String(e.errMsg || '')))) return { pass: false };
+    console.error('[secCheck.security] imgSecCheck error:', e);
+    throw new BizError(2004);
+  }
+  const errMsg = res && res.errMsg;
+  if (res && res.errCode === 87014) return { pass: false };
+  const abnormal =
+    !res ||
+    res.errCode !== 0 ||
+    (typeof errMsg === 'string' && errMsg.length > 0 && !/^openapi success$|:ok$/i.test(errMsg));
+  if (abnormal) {
+    console.error('[secCheck.security] imgSecCheck abnormal response:', JSON.stringify(res).slice(0, 500));
+    throw new BizError(2004);
+  }
+  return { pass: true };
+}
+
+/** 下载签名 URL 内容为 Buffer（10s 超时；非 200 → throw） */
+function fetchBuffer(url, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, (res2) => {
+      if (res2.statusCode !== 200) { res2.resume(); return reject(new Error('HTTP ' + res2.statusCode)); }
+      const chunks = [];
+      res2.on('data', (c) => chunks.push(c));
+      res2.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('download timeout')));
+  });
+}
+
+module.exports = { checkText, textFinalCheck, verifyPhotos, promotePhotos, checkImageSync, fetchBuffer };

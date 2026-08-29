@@ -13,6 +13,20 @@ const cloud = require('wx-server-sdk');
 const { BizError, ok } = require('../lib/errors');
 const { UUID_RE } = require('../lib/constants');
 const { ossClient } = require('../lib/oss');
+const { checkImageSync, fetchBuffer } = require('../lib/security');
+
+/** 落审核任务对象（S7-R2：同步/异步两路共用） */
+async function writeTaskRow(client, photoId, openid, status, traceId) {
+  const task = { photoId, openid, status, traceId: traceId || null, createdAt: Date.now() };
+  await client.put(`sec-check/task/${photoId}.json`, Buffer.from(JSON.stringify(task), 'utf8'), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (traceId) {
+    await client.put(`sec-check/task/_trace/${traceId}.json`, Buffer.from(JSON.stringify({ photoId, openid }), 'utf8'), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
 
 /** action = "imageSubmit"：HEAD 隔离区对象 → 10min 签名 URL → mediaCheckAsync → 落任务对象 */
 async function handleImageSubmit(event, openid) {
@@ -45,7 +59,34 @@ async function handleImageSubmit(event, openid) {
     throw new BizError(3001);
   }
 
-  // 3. 10 分钟签名 URL 供 mediaCheckAsync 拉取（受审对象 = 原图本体）
+  // 3. 同步审核优先（S7-R2 降级，契约预留）：消息推送回投通道在本环境不可用，
+  //    改为服务端拉取隔离区对象的缩放版本（w_750→480→320，≤1MB）走同步 imgSecCheck。
+  //    业务拒绝 → 落 reject 任务并立即返回终态；接口异常/下载失败 → 回退下方异步 mediaCheckAsync 路径。
+  try {
+    let buffer = null;
+    for (const w of [750, 480, 320]) {
+      const u = client.signatureUrl(imgKey, { expires: 600, process: 'image/resize,w_' + w });
+      const b = await fetchBuffer(u);
+      buffer = b;
+      if (b.length <= 1024 * 1024) break;
+    }
+    if (buffer && buffer.length <= 1024 * 1024) {
+      const r = await checkImageSync(buffer, openid);
+      const status = r.pass ? 'pass' : 'reject';
+      await writeTaskRow(client, photoId, openid, status, null);
+      console.log('[secCheck.imageSubmit] sync audit done:', photoId, status);
+      return ok({ checkId: photoId, status });
+    }
+    console.error('[secCheck.imageSubmit] resized buffer still >1MB, fallback to async');
+  } catch (e) {
+    if (e instanceof BizError && e.code === 2004) {
+      console.error('[secCheck.imageSubmit] sync imgSecCheck API error, fallback to async:', e);
+    } else {
+      console.error('[secCheck.imageSubmit] sync audit failed, fallback to async:', e);
+    }
+  }
+
+  // 3a. 10 分钟签名 URL 供 mediaCheckAsync 拉取（受审对象 = 原图本体；异步兜底路径）
   let url;
   try {
     url = client.signatureUrl(imgKey, { expires: 600 });
@@ -78,13 +119,8 @@ async function handleImageSubmit(event, openid) {
   }
 
   // 5. 落审核记录（任务对象，含 openid/status/traceId/时间戳）+ traceId 反向映射（回投定位用）
-  const task = { photoId, openid, status: 'pending', traceId, createdAt: Date.now() };
   try {
-    const jsonBuf = Buffer.from(JSON.stringify(task), 'utf8');
-    await client.put(`sec-check/task/${photoId}.json`, jsonBuf, { headers: { 'Content-Type': 'application/json' } });
-    await client.put(`sec-check/task/_trace/${traceId}.json`, Buffer.from(JSON.stringify({ photoId, openid }), 'utf8'), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    await writeTaskRow(client, photoId, openid, 'pending', traceId);
   } catch (e) {
     console.error('[secCheck.imageSubmit] write task failed:', e);
     throw new BizError(3001);

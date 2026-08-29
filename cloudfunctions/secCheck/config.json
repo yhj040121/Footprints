@@ -2,7 +2,8 @@
   "permissions": {
     "openapi": [
       "security.msgSecCheck",
-      "security.mediaCheckAsync"
+      "security.mediaCheckAsync",
+      "security.imgSecCheck"
     ]
   }
 }
