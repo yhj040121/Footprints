@@ -16,3 +16,7 @@ miniprogram/utils/config.local.js
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# 本地素材与工具目录（用户指示不入库）
+avatar.jpg
+.claude/
