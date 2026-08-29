@@ -1,0 +1,53 @@
+<view class="page">
+  <mock-badge />
+  <!-- 顶部：年月 + 左右切换 -->
+  <view class="cal-head">
+    <view class="cal-arrow" hover-class="cal-arrow--hover" bindtap="onPrevMonth">‹</view>
+    <view class="cal-title">{{monthLabel}}</view>
+    <view class="cal-arrow" hover-class="cal-arrow--hover" bindtap="onNextMonth">›</view>
+  </view>
+
+  <!-- 表头：周日到周六 -->
+  <view class="week-row">
+    <view wx:for="{{weekDays}}" wx:key="*this" class="week-cell">{{item}}</view>
+  </view>
+
+  <!-- 42 格：先出日期数字，缩略图/圆点异步回填 -->
+  <view class="grid">
+    <view wx:for="{{cells}}" wx:key="date" class="cell">
+      <view
+        class="cell-inner {{item.inMonth ? '' : 'cell-inner--muted'}} {{item.isToday ? 'cell-inner--today' : ''}} {{item.isSelected ? 'cell-inner--selected' : ''}}"
+        data-date="{{item.date}}"
+        data-inmonth="{{item.inMonth}}"
+        bindtap="onTapCell"
+      >
+        <image wx:if="{{item.thumb}}" class="cell-thumb" src="{{item.thumb}}" mode="aspectFill" lazy-load="true" />
+        <view wx:elif="{{item.loading}}" class="cell-thumb cell-thumb--loading"></view>
+        <text class="cell-day {{item.thumb ? 'cell-day--on-thumb' : ''}}">{{item.day}}</text>
+        <view wx:if="{{item.dot}}" class="cell-dot"></view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 图例 -->
+  <view class="legend fp-hint">● 有行旅记录</view>
+
+  <!-- 当日记录列表 -->
+  <block wx:if="{{dayTitle}}">
+    <view class="day-head">
+      <text class="day-title">{{dayTitle}}</text>
+    </view>
+    <view class="day-list">
+      <footprint-card
+        wx:for="{{dayRecords}}"
+        wx:key="_id"
+        record="{{item}}"
+        cover-url="{{item.coverUrl}}"
+        bind:tap="onTapCard"
+      />
+      <view wx:if="{{!dayRecords.length}}" class="fp-card day-empty">
+        <text class="fp-hint">这一天还没有行旅记录</text>
+      </view>
+    </view>
+  </block>
+</view>

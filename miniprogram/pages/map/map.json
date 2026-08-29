@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "足迹地图",
+  "usingComponents": {
+    "mock-badge": "/components/mock-badge/index"
+  }
+}

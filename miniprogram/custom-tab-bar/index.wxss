@@ -1,0 +1,69 @@
+/* 5 槽自定义 tabBar：中央凸出大按钮 */
+.tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: stretch;
+  height: 110rpx;
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: #FDFBF5;
+  border-top: 1rpx solid #E2DACA;
+  z-index: 100;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  color: #9A937F;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab-item--active {
+  color: #35322C;
+  font-weight: 500;
+}
+
+.tab-icon {
+  font-size: 36rpx;
+  line-height: 1.2;
+}
+
+.tab-text {
+  font-size: 22rpx;
+  line-height: 1.2;
+}
+
+/* 中央凸出「＋」大按钮 */
+.tab-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+}
+
+.tab-center-btn {
+  width: 96rpx;
+  height: 96rpx;
+  margin-top: -48rpx;
+  border-radius: 50%;
+  background: #35322C;
+  color: #F8F4EA;
+  font-size: 56rpx;
+  line-height: 92rpx;
+  text-align: center;
+  border: 6rpx solid #FDFBF5;
+  box-shadow: none;
+}
+
+.tab-text--center {
+  margin-top: 4rpx;
+  color: #9A937F;
+}

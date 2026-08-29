@@ -1,0 +1,142 @@
+/* 足迹地图页样式 —— 复用 app.wxss 变量与 fp-* 通用类；无阴影、仅浅色 */
+.map-page {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+/* 图例说明：顶部居中浅色小条 */
+.legend {
+  position: absolute;
+  top: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 86%;
+  padding: 8rpx 24rpx;
+  border-radius: var(--radius-full);
+  border: 1rpx solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  text-align: center;
+}
+
+/* 无含坐标记录时的轻提示 */
+.empty-hint {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12rpx 32rpx;
+  border-radius: var(--radius-full);
+  border: 1rpx solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  white-space: nowrap;
+}
+
+/* 「定位我」圆形按钮：右下角，浮于卡片之上；tabBar 高 110rpx，故底部再让出 */
+.locate-btn {
+  position: absolute;
+  right: var(--space-4);
+  bottom: calc(150rpx + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  width: 112rpx;
+  height: 112rpx;
+  padding: 0;
+  border-radius: var(--radius-full);
+  border: 1rpx solid var(--color-border-control);
+  background: var(--color-bg-surface);
+  box-shadow: none;
+  line-height: 1;
+}
+.locate-btn::after { border: none; }
+.locate-btn--hover { background: var(--color-bg-hover); }
+/* 卡片展开时上移，避免与卡片重叠 */
+.locate-btn--up {
+  bottom: calc(390rpx + env(safe-area-inset-bottom));
+}
+
+.locate-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: var(--radius-full);
+  border: 3rpx solid var(--color-text-primary);
+}
+.locate-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: var(--radius-full);
+  background: var(--color-text-primary);
+}
+.locate-text {
+  font-size: 20rpx;
+  color: var(--color-text-primary);
+}
+
+/* 底部记录卡片：左缩略图 + 右文字，浮于 tabBar 之上 */
+.map-card {
+  position: absolute;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: calc(150rpx + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  padding: var(--space-3);
+  gap: var(--space-3);
+}
+
+.card-thumb {
+  flex: none;
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+}
+
+.card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+.card-place {
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.card-note {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* 关闭按钮：触控目标 ≥88rpx */
+.card-close {
+  flex: none;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88rpx;
+  height: 88rpx;
+  margin: -16rpx -16rpx 0 0;
+  font-size: var(--text-xl);
+  color: var(--color-text-muted);
+}

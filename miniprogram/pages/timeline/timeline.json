@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "溪山行旅",
+  "enablePullDownRefresh": true,
+  "backgroundColor": "#F6F2E9",
+  "usingComponents": {
+    "footprint-card": "/components/footprint-card/index",
+    "mock-badge": "/components/mock-badge/index"
+  }
+}

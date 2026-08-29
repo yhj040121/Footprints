@@ -1,0 +1,22 @@
+<view class="fp-card card" bindtap="onTap">
+  <view class="cover">
+    <image
+      wx:if="{{coverUrl}}"
+      class="cover-img"
+      src="{{coverUrl}}"
+      mode="aspectFill"
+      lazy-load="true"
+    />
+    <view wx:else class="cover-empty">无图</view>
+  </view>
+  <view class="body">
+    <view class="place">
+      <text class="place-icon">⌖</text>
+      <text class="place-text">{{record.place}}</text>
+    </view>
+    <view class="note">{{record.note}}</view>
+    <view class="tags" wx:if="{{record.tags.length}}">
+      <text wx:for="{{record.tags}}" wx:key="*this" class="fp-chip tag">{{item}}</text>
+    </view>
+  </view>
+</view>

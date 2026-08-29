@@ -1,0 +1,14 @@
+{
+  "name": "ossSts",
+  "version": "1.0.0",
+  "description": "Footprints ossSts: OSS upload credentials (STS + PostObject) and signed URLs (CONTRACT 1.3)",
+  "main": "index.js",
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "wx-server-sdk": "^2.6.3",
+    "ali-oss": "^6.18.1",
+    "@alicloud/pop-core": "^1.7.12"
+  }
+}

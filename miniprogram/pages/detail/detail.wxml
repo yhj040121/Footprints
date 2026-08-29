@@ -1,0 +1,66 @@
+<!-- detail 足迹详情页：日期大标题 / 地点行 / 标签 chips / 备注全文 / 照片三列网格 / 底部固定操作条 -->
+<view class="page">
+  <mock-badge />
+  <!-- 加载中 -->
+  <view class="state" wx:if="{{loading}}">
+    <text class="fp-hint">加载中…</text>
+  </view>
+
+  <!-- 查无记录（含已被删除） -->
+  <view class="state" wx:elif="{{notFound}}">
+    <view class="state-text">记录不存在或已被删除</view>
+    <button class="fp-btn-plain state-btn" bindtap="onBack">返回</button>
+  </view>
+
+  <!-- 断网/服务端异常（S6-R3：与「记录不存在」区分，可重试） -->
+  <view class="state" wx:elif="{{networkError}}">
+    <view class="state-text">网络异常，请检查网络后重试</view>
+    <view class="state-btns">
+      <button class="fp-btn-primary state-btn" bindtap="onRetryLoad">重试</button>
+      <button class="fp-btn-plain state-btn" bindtap="onBack">返回</button>
+    </view>
+  </view>
+
+  <!-- 正常内容 -->
+  <block wx:elif="{{fp}}">
+    <scroll-view scroll-y class="content">
+      <view class="head">
+        <view class="date-title">{{dateText}}</view>
+        <view class="place-row">
+          <text class="place-icon">⌖</text>
+          <text class="place-text">{{fp.place}}</text>
+        </view>
+        <view class="tags" wx:if="{{fp.tags && fp.tags.length}}">
+          <text class="fp-chip" wx:for="{{fp.tags}}" wx:key="*this">{{item}}</text>
+        </view>
+      </view>
+
+      <view class="note fp-card" wx:if="{{fp.note}}">
+        <text class="note-text">{{fp.note}}</text>
+      </view>
+
+      <view class="photos" wx:if="{{fp.photos && fp.photos.length}}">
+        <view class="photo-grid" wx:if="{{photoUrls.length}}">
+          <image
+            wx:for="{{photoUrls}}"
+            wx:key="index"
+            class="photo"
+            src="{{item}}"
+            mode="aspectFill"
+            data-index="{{index}}"
+            bindtap="onPreviewPhoto"
+          />
+        </view>
+        <view class="fp-hint photo-hint" wx:if="{{photoFailed}}">照片加载失败，重新进入可重试</view>
+      </view>
+
+      <!-- 底部操作条占位，防内容被遮挡 -->
+      <view class="bottom-spacer"></view>
+    </scroll-view>
+
+    <view class="action-bar">
+      <button class="fp-btn-plain action-btn" bindtap="onEdit">编辑</button>
+      <button class="fp-btn-primary action-btn" loading="{{deleting}}" disabled="{{deleting}}" bindtap="onDelete">删除</button>
+    </view>
+  </block>
+</view>

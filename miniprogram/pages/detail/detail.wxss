@@ -1,0 +1,125 @@
+/* detail 足迹详情页 —— 水墨暖纸色，仅复用全局 token 与 fp-* 通用类，无阴影 */
+
+.page {
+  min-height: 100vh;
+  background: var(--color-bg-page);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 加载中 / 查无记录 状态页 */
+.state {
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.state-text {
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+
+.state-btn {
+  min-width: 240rpx;
+}
+
+.content {
+  flex: 1;
+  height: 100vh;
+  padding: 0 var(--space-4);
+}
+
+/* 头部：日期大标题 + 地点行 + 标签 */
+.head {
+  padding: var(--space-6) 0 var(--space-4);
+}
+
+.date-title {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: 2rpx;
+}
+
+.place-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+
+.place-icon {
+  font-size: var(--text-sm);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* 备注全文（不截断，FR-11） */
+.note {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.note-text {
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 照片区：三列网格，顺序与记录一致 */
+.photos {
+  margin-bottom: var(--space-4);
+}
+
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.photo {
+  width: calc((100% - 2 * var(--space-2)) / 3);
+  height: 226rpx;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+}
+
+.photo-hint {
+  padding: var(--space-2) 0;
+}
+
+/* 底部固定操作条（编辑=次按钮，删除=主按钮，触控目标 ≥88rpx 由通用类保证） */
+.bottom-spacer {
+  height: 200rpx;
+}
+
+.action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  background: var(--color-bg-surface);
+  border-top: 1rpx solid var(--color-border-subtle);
+}
+
+.action-btn {
+  flex: 1;
+  margin: 0;
+}

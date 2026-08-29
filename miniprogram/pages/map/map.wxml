@@ -1,0 +1,31 @@
+<!-- 足迹地图（FR-10）：全屏地图 + 打点连线 + 底部记录卡片 + 定位我 -->
+<view class="map-page">
+  <mock-badge />
+  <map id="footprintMap" class="map"
+       latitude="{{latitude}}" longitude="{{longitude}}" scale="{{scale}}"
+       markers="{{markers}}" polyline="{{polyline}}"
+       bindmarkertap="onMarkerTap" bindtap="onMapTap" bindregionchange="onRegionChange"></map>
+
+  <!-- 图例说明（FR-10 验收 6）：仅说明记录顺序，不提路线/轨迹还原 -->
+  <view class="legend fp-hint">连线仅表示记录先后顺序，不代表真实行走路线</view>
+
+  <view wx:if="{{empty}}" class="empty-hint fp-hint">暂无带位置的足迹</view>
+
+  <!-- 定位我（右下角圆形按钮） -->
+  <button class="locate-btn {{card ? 'locate-btn--up' : ''}}" bindtap="onLocate" hover-class="locate-btn--hover">
+    <view class="locate-icon"><view class="locate-dot"></view></view>
+    <text class="locate-text">定位我</text>
+  </button>
+
+  <!-- 底部记录浮层卡片 -->
+  <view wx:if="{{card}}" class="fp-card map-card" bindtap="onCardTap">
+    <image wx:if="{{card.thumb}}" class="card-thumb" src="{{card.thumb}}" mode="aspectFill" />
+    <view wx:else class="card-thumb card-thumb--empty"></view>
+    <view class="card-body">
+      <text class="card-date fp-hint">{{card.dateText}}</text>
+      <text class="card-place">{{card.place}}</text>
+      <text wx:if="{{card.note}}" class="card-note">{{card.note}}</text>
+    </view>
+    <view class="card-close" catchtap="onCardClose">×</view>
+  </view>
+</view>

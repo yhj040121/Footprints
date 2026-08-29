@@ -1,0 +1,149 @@
+<!-- 新增/编辑足迹（FR-03~07 / FR-13）：照片九宫格 + 表单 + 保存全链路 -->
+<view class="page">
+  <mock-badge />
+
+  <!-- 编辑模式提示条 -->
+  <view wx:if="{{isEdit}}" class="edit-bar">
+    <text>正在编辑这条足迹</text>
+    <text class="edit-cancel" bindtap="onCancelEdit">取消编辑</text>
+  </view>
+
+  <!-- 照片区：≤9 张，选定仅本地预览，点保存后先传隔离区再审核（FR-05 / §4.1 S6-R2 时序） -->
+  <view class="photo-grid">
+    <view class="photo-cell" wx:for="{{photos}}" wx:key="uid">
+      <image class="photo-img" src="{{item.url}}" mode="aspectFill" wx:if="{{item.url}}" />
+      <view class="photo-img photo-img--empty" wx:else></view>
+
+      <!-- 状态遮罩 -->
+      <view wx:if="{{item.status === 'checking'}}" class="photo-mask">检测中</view>
+      <view wx:elif="{{item.status === 'uploading'}}" class="photo-mask">{{item.progress}}%</view>
+      <view wx:elif="{{item.status === 'review-failed'}}" class="photo-mask photo-mask--bad">未通过</view>
+      <view wx:elif="{{item.status === 'upload-failed'}}" class="photo-mask photo-mask--bad" catchtap="onPhotoRetry" data-uid="{{item.uid}}">失败 · 重试</view>
+
+      <!-- 移除（保存中禁用） -->
+      <view wx:if="{{!saving}}" class="photo-del" catchtap="onRemovePhoto" data-uid="{{item.uid}}">✕</view>
+    </view>
+
+    <view wx:if="{{photos.length < maxPhotos && !saving}}" class="photo-cell photo-add" bindtap="onAddPhotos">
+      <view class="photo-add-icon">＋</view>
+      <view class="photo-add-text">添加照片</view>
+    </view>
+  </view>
+  <view class="fp-hint photo-hint">照片将在保存时上传并检测，单张 ≤10MB</view>
+
+  <!-- 日期（FR-03：只选年月日，默认今天，不可选未来） -->
+  <view class="fp-card field-card">
+    <picker mode="date" value="{{date}}" end="{{today}}" bindchange="onDateChange" disabled="{{saving}}">
+      <view class="field-row">
+        <text class="field-label">日期</text>
+        <view class="field-value">
+          <text>{{dateText}}</text>
+          <text class="field-arrow">›</text>
+        </view>
+      </view>
+    </picker>
+  </view>
+
+  <!-- 地点（FR-03/FR-04：手动输入 ≤50 字；选点回填；手动改写清坐标） -->
+  <view class="fp-card field-card">
+    <view class="field-row field-row--input">
+      <text class="field-label">地点</text>
+      <input
+        class="field-input"
+        value="{{place}}"
+        maxlength="50"
+        placeholder="在哪里"
+        placeholder-class="ph"
+        bindinput="onPlaceInput"
+        disabled="{{saving}}"
+      />
+    </view>
+    <view class="field-row field-row--loc">
+      <view class="loc-status">
+        <text wx:if="{{hasCoord}}" class="fp-hint">已获取坐标，保存后上地图</text>
+        <text wx:elif="{{placeError}}" class="field-error">{{placeError}}</text>
+      </view>
+      <button class="fp-btn-plain loc-btn" bindtap="onGetLocation" disabled="{{saving}}">获取当前位置</button>
+    </view>
+  </view>
+
+  <!-- 备注（FR-03：≤500 字，实时计数） -->
+  <view class="fp-card field-card">
+    <view class="field-label note-label">备注</view>
+    <textarea
+      class="note-input"
+      value="{{note}}"
+      maxlength="{{maxNoteLen}}"
+      placeholder="记录此刻的心境与风景…"
+      placeholder-class="ph"
+      bindinput="onNoteInput"
+      disabled="{{saving}}"
+      auto-height
+    />
+    <view class="note-foot">
+      <text wx:if="{{noteError}}" class="field-error">{{noteError}}</text>
+      <text class="note-count">{{noteLen}}/{{maxNoteLen}}</text>
+    </view>
+  </view>
+
+  <!-- 标签（FR-03：预设 6 + 自定义先审后写，≤10 个） -->
+  <view class="tags">
+    <view
+      wx:for="{{allTags}}"
+      wx:key="*this"
+      class="fp-chip tag {{selectedTags.indexOf(item) >= 0 ? 'fp-chip--active' : ''}}"
+      data-tag="{{item}}"
+      bindtap="onTagToggle"
+    >{{item}}</view>
+    <view class="fp-chip tag tag-custom" bindtap="onShowTagModal">＋自定义</view>
+  </view>
+
+  <!-- 保存 -->
+  <button class="fp-btn-primary save-btn" bindtap="onSave" disabled="{{saving}}">
+    {{isEdit ? '保存修改' : '保存'}}
+  </button>
+
+  <!-- 自定义标签弹窗（FR-03：回车/确认创建，先审后写） -->
+  <view wx:if="{{tagModalVisible}}" class="mask" catchtouchmove="noop">
+    <view class="panel">
+      <view class="panel-title">自定义标签</view>
+      <input
+        class="panel-input"
+        value="{{tagInput}}"
+        maxlength="10"
+        placeholder="最多 10 字"
+        placeholder-class="ph"
+        confirm-type="done"
+        bindinput="onTagInput"
+        bindconfirm="onTagConfirm"
+        focus
+      />
+      <view class="panel-btns">
+        <button class="fp-btn-plain panel-btn" bindtap="onTagModalCancel">取消</button>
+        <button class="fp-btn-primary panel-btn" bindtap="onTagConfirm" disabled="{{tagChecking}}">
+          {{tagChecking ? '检测中…' : '确定'}}
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 保存进度/结果弹层（FR-07：进度可见；失败给重试入口，重试沿用同一 clientSaveId） -->
+  <view wx:if="{{saving || saveError}}" class="mask" catchtouchmove="noop">
+    <view class="panel">
+      <view class="panel-title">{{isEdit ? '保存修改' : '保存足迹'}}</view>
+      <block wx:if="{{saving}}">
+        <view class="panel-text">{{saveText}}</view>
+        <view class="panel-btns">
+          <button class="fp-btn-plain panel-btn" bindtap="onSaveCancel">取消</button>
+        </view>
+      </block>
+      <block wx:else>
+        <view class="panel-text">{{saveError.message}}</view>
+        <view class="panel-btns">
+          <button class="fp-btn-plain panel-btn" bindtap="onSaveCancel">取消</button>
+          <button wx:if="{{saveError.retryable}}" class="fp-btn-primary panel-btn" bindtap="onSaveRetry">重试</button>
+        </view>
+      </block>
+    </view>
+  </view>
+</view>

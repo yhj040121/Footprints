@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "记录足迹",
+  "backgroundColor": "#F6F2E9",
+  "usingComponents": {
+    "mock-badge": "/components/mock-badge/index"
+  }
+}

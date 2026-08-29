@@ -1,0 +1,83 @@
+.card {
+  display: flex;
+  gap: 24rpx;
+  padding: 24rpx;
+}
+
+.cover {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #EFE9DC;
+}
+
+.cover-img {
+  width: 100%;
+  height: 100%;
+}
+
+.cover-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9A937F;
+  font-size: 24rpx;
+  border: 1rpx dashed #B4AB97;
+  border-radius: 16rpx;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.place {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #35322C;
+}
+
+.place-icon {
+  font-size: 26rpx;
+}
+
+.place-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.note {
+  color: #6E685C;
+  font-size: 26rpx;
+  line-height: 1.5;
+  /* FR-08：备注恰好 2 行截断 */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: auto;
+}
+
+.tag {
+  min-height: 44rpx;
+  padding: 2rpx 18rpx;
+  font-size: 22rpx;
+  border-color: #E2DACA;
+}

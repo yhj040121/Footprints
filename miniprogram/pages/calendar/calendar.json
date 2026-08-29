@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "日历",
+  "usingComponents": {
+    "footprint-card": "/components/footprint-card/index",
+    "mock-badge": "/components/mock-badge/index"
+  }
+}

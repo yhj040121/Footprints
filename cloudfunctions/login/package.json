@@ -1,0 +1,12 @@
+{
+  "name": "login",
+  "version": "1.0.0",
+  "description": "Footprints login: silent login, create/reuse user doc (CONTRACT 1.1)",
+  "main": "index.js",
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "wx-server-sdk": "^2.6.3"
+  }
+}

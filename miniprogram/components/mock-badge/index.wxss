@@ -1,0 +1,15 @@
+/* 「模拟模式」角标：固定右上角，醒目但不挡操作 */
+.mock-badge {
+  position: fixed;
+  top: 12rpx;
+  right: 16rpx;
+  z-index: 9999;
+  padding: 4rpx 16rpx;
+  font-size: 20rpx;
+  line-height: 1.6;
+  color: #fff;
+  background: #8C3B2E;
+  border-radius: 999rpx;
+  opacity: 0.92;
+  pointer-events: none;
+}

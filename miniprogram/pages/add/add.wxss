@@ -1,0 +1,243 @@
+/* 新增/编辑足迹（FR-03~07）：水墨暖纸色，卡片式表单 */
+
+.page {
+  min-height: 100vh;
+  padding: var(--space-4) var(--space-4) var(--space-8);
+}
+
+.ph {
+  color: var(--color-text-muted);
+}
+
+/* ---------- 编辑提示条 ---------- */
+.edit-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.edit-cancel {
+  color: var(--color-text-primary);
+  font-weight: 500;
+  padding: 4rpx 12rpx;
+}
+
+/* ---------- 照片九宫格 ---------- */
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.photo-cell {
+  position: relative;
+  width: 216rpx;
+  height: 216rpx;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg-subtle);
+}
+.photo-img {
+  width: 100%;
+  height: 100%;
+}
+.photo-img--empty {
+  border: 1rpx dashed var(--color-border-control);
+}
+.photo-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 45%);
+  color: #F8F4EA;
+  font-size: var(--text-xs);
+}
+.photo-mask--bad {
+  background: rgb(140 59 46 / 72%);
+}
+.photo-del {
+  position: absolute;
+  top: 8rpx;
+  right: 8rpx;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: var(--radius-full);
+  background: rgb(0 0 0 / 55%);
+  color: #F8F4EA;
+  font-size: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.photo-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  border: 1rpx dashed var(--color-border-control);
+  background: var(--color-bg-surface);
+  color: var(--color-text-muted);
+}
+.photo-add-icon {
+  font-size: 56rpx;
+  line-height: 1;
+}
+.photo-add-text {
+  font-size: var(--text-xs);
+}
+.photo-hint {
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+/* ---------- 表单卡片 ---------- */
+.field-card {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72rpx;
+}
+.field-row--input {
+  gap: var(--space-3);
+}
+.field-row--loc {
+  border-top: 1rpx solid var(--color-border-subtle);
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+  min-height: 80rpx;
+}
+.field-label {
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.field-value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+}
+.field-arrow {
+  color: var(--color-text-muted);
+  font-size: 36rpx;
+  line-height: 1;
+}
+.field-input {
+  flex: 1;
+  text-align: right;
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+}
+.field-error {
+  color: #8C3B2E;
+  font-size: var(--text-xs);
+}
+.loc-status {
+  flex: 1;
+  min-width: 0;
+}
+.loc-btn {
+  min-height: 64rpx;
+  padding: 8rpx 24rpx;
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+}
+
+/* ---------- 备注 ---------- */
+.note-label {
+  margin-bottom: var(--space-2);
+}
+.note-input {
+  width: 100%;
+  min-height: 160rpx;
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+}
+.note-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--space-1);
+  min-height: 40rpx;
+}
+.note-count {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* ---------- 标签 ---------- */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+.tag-custom {
+  border-style: dashed;
+}
+
+/* ---------- 保存按钮 ---------- */
+.save-btn {
+  margin-top: var(--space-4);
+}
+
+/* ---------- 弹层 ---------- */
+.mask {
+  position: fixed;
+  inset: 0;
+  background: var(--color-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.panel {
+  width: 600rpx;
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.panel-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  text-align: center;
+}
+.panel-input {
+  min-height: 80rpx;
+  padding: 0 var(--space-3);
+  border: 1rpx solid var(--color-border-control);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  background: var(--color-bg-page);
+}
+.panel-text {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  text-align: center;
+  line-height: 1.6;
+}
+.panel-btns {
+  display: flex;
+  gap: var(--space-3);
+}
+.panel-btn {
+  flex: 1;
+}

@@ -1,0 +1,132 @@
+/* 溪山行旅 全局样式 —— 水墨暖纸色（FR-16 覆盖 desgin.md：仅浅色，不做深色适配）
+ * 规则继承 desgin.md：无阴影、圆角、语义变量优先、字号/间距用统一刻度 */
+
+page {
+  /* 色板：水墨暖纸色（浅色唯一主题） */
+  --color-bg-page: #F6F2E9;        /* 暖纸底 */
+  --color-bg-surface: #FDFBF5;     /* 卡片/输入框 */
+  --color-bg-subtle: #EFE9DC;      /* 次级区域 */
+  --color-bg-hover: #EAE3D4;       /* 按下/悬停 */
+  --color-text-primary: #35322C;   /* 墨色正文 */
+  --color-text-secondary: #6E685C; /* 次要 */
+  --color-text-muted: #9A937F;     /* 辅助/占位 */
+  --color-text-disabled: #B7AF9E;  /* 禁用 */
+  --color-border-subtle: #E2DACA;  /* 装饰分割线 */
+  --color-border-control: #B4AB97; /* 控件边界 */
+  --color-action-bg: #35322C;      /* 主按钮墨底 */
+  --color-action-pressed: #4A463E;
+  --color-action-text: #F8F4EA;    /* 主按钮文字 */
+  --color-overlay: rgb(0 0 0 / 48%);
+
+  /* 字号刻度（rpx 以 375 屏宽为基准换算） */
+  --text-xs: 24rpx;
+  --text-sm: 28rpx;
+  --text-base: 32rpx;
+  --text-lg: 36rpx;
+  --text-xl: 40rpx;
+  --text-2xl: 48rpx;
+
+  /* 间距刻度 */
+  --space-1: 8rpx;
+  --space-2: 16rpx;
+  --space-3: 24rpx;
+  --space-4: 32rpx;
+  --space-5: 40rpx;
+  --space-6: 48rpx;
+  --space-8: 64rpx;
+
+  /* 圆角 */
+  --radius-sm: 8rpx;
+  --radius-md: 16rpx;
+  --radius-lg: 24rpx;
+  --radius-full: 9999rpx;
+
+  /* 动效 */
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-slow: 240ms;
+
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+view, text, input, textarea, button, image, scroll-view, swiper {
+  box-sizing: border-box;
+}
+
+/* 通用卡片 */
+.fp-card {
+  background: var(--color-bg-surface);
+  border: 1rpx solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+
+/* 通用主按钮 */
+.fp-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88rpx;
+  padding: 16rpx 32rpx;
+  border-radius: var(--radius-md);
+  background: var(--color-action-bg);
+  color: var(--color-action-text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  box-shadow: none;
+}
+.fp-btn-primary::after { border: none; }
+.fp-btn-primary.button-hover { background: var(--color-action-pressed); }
+.fp-btn-primary[disabled] {
+  color: var(--color-text-disabled);
+  background: var(--color-bg-hover);
+}
+
+/* 通用次按钮 */
+.fp-btn-plain {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88rpx;
+  padding: 16rpx 32rpx;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  border: 1rpx solid var(--color-border-control);
+  font-size: var(--text-sm);
+  box-shadow: none;
+}
+.fp-btn-plain::after { border: none; }
+.fp-btn-plain.button-hover { background: var(--color-bg-hover); }
+
+/* 标签 chip */
+.fp-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 56rpx;
+  padding: 6rpx 24rpx;
+  border-radius: var(--radius-full);
+  border: 1rpx solid var(--color-border-control);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.fp-chip--active {
+  background: var(--color-action-bg);
+  border-color: var(--color-action-bg);
+  color: var(--color-action-text);
+}
+.fp-chip--disabled {
+  color: var(--color-text-disabled);
+  border-color: var(--color-border-subtle);
+}
+
+/* 辅助说明文字 */
+.fp-hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
