@@ -10,8 +10,11 @@
  *    而前端后续读写本人 user 文档依赖「仅创建者可读写」（按 _openid 判定）。
  * 4. createdAt 由服务端 serverDate 写入，前端传了也忽略。
  * 5. S6-R4：action=updateProfile 头像/昵称更新（user 集合客户端 write:false 后的服务端写入口）。
+ * 6. S7：未知 action（非空且 ≠ updateProfile）直接 1001，不落入普通登录；
+ *    updateProfile 的 avatarUrl MIME 收紧为 image/jpeg|png|webp；update 须恰好更新 1 条、
+ *    回读失败一律 9000（绝不返回空 profile）。
  *
- * 错误码：1001（updateProfile 格式/超限）、1002（code 无效/上下文无 openid）、9000（未预期异常）。
+ * 错误码：1001（updateProfile 格式/超限/未知 action）、1002（code 无效/上下文无 openid）、9000（未预期异常）。
  *
  * 环境变量（仅环境变量描述，绝不写真实值进代码/仓库）：
  *   WX_APPID    微信小程序 AppID（=wx195015715a8e389d，已定可入文档）
@@ -79,6 +82,18 @@ function code2Session(code) {
 
 exports.main = async (event) => {
   try {
+    // S7：未知 action（非空且 ≠ updateProfile）直接 1001，不落入普通登录
+    if (
+      event &&
+      event.action !== undefined &&
+      event.action !== null &&
+      event.action !== '' &&
+      event.action !== 'updateProfile'
+    ) {
+      console.warn('[login] unknown action:', event.action);
+      return fail(1001, CODE_MSG[1001]);
+    }
+
     const wxContext = cloud.getWXContext();
     let openid = wxContext.OPENID;
 
@@ -140,17 +155,19 @@ exports.main = async (event) => {
 
 /**
  * action = "updateProfile"（S6-R4，契约 §1.1）：头像/昵称更新（FR-14）。
- * 入参：avatarUrl（base64 dataURL，解码后 ≤64KB，超限 1001）、nickname（1~32 字，去首尾空白）。
+ * 入参：avatarUrl（base64 dataURL，S7 收紧仅 image/jpeg|png|webp，解码后 ≤64KB，超限 1001）、
+ *       nickname（1~32 字，去首尾空白）。
  * 未传/传 null 的字段不动；openid 取自上下文；出参返回更新后的完整 profile。
- * 错误码：1001（格式/超限）、1002（无 openid）、9000（DB 异常）。
+ * S7：update 须恰好命中 1 条文档、回读失败 → 9000（绝不返回空 profile）。
+ * 错误码：1001（格式/MIME/超限）、9000（DB 异常）。
  */
 async function handleUpdateProfile(event, openid) {
   const update = {};
 
-  // avatarUrl：base64 dataURL，解码后 ≤64KB
+  // avatarUrl：base64 dataURL（S7 收紧：仅 image/jpeg|png|webp），解码后 ≤64KB
   if (event.avatarUrl !== undefined && event.avatarUrl !== null) {
     if (typeof event.avatarUrl !== 'string') return fail(1001, CODE_MSG[1001]);
-    const m = /^data:[^;]+;base64,([A-Za-z0-9+/=]+)$/.exec(event.avatarUrl);
+    const m = /^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(event.avatarUrl);
     if (!m) return fail(1001, CODE_MSG[1001]);
     let buf;
     try {
@@ -173,19 +190,32 @@ async function handleUpdateProfile(event, openid) {
   if (!Object.keys(update).length) return fail(1001, CODE_MSG[1001]); // 无字段可更新
 
   try {
-    await db.collection('user').doc(openid).update({ data: update });
+    const updRes = await db.collection('user').doc(openid).update({ data: update });
+    // S7：必须恰好更新 1 条文档，否则视为异常（含文档不存在的 updated=0）
+    const updated = updRes && updRes.stats && typeof updRes.stats.updated === 'number'
+      ? updRes.stats.updated
+      : null;
+    if (updated !== 1) {
+      console.error('[login.updateProfile] unexpected update stats:', JSON.stringify(updRes));
+      return fail(9000, CODE_MSG[9000]);
+    }
   } catch (e) {
     console.error('[login.updateProfile] update failed:', e);
     return fail(9000, CODE_MSG[9000]);
   }
 
-  // 回读返回完整 profile
-  let u = {};
+  // 回读返回完整 profile（S7：回读失败 → 9000，绝不返回空 profile）
+  let got;
   try {
-    const got = await db.collection('user').doc(openid).get();
-    u = (got && got.data) || {};
+    got = await db.collection('user').doc(openid).get();
   } catch (e) {
-    console.warn('[login.updateProfile] readback failed:', e && e.message);
+    console.error('[login.updateProfile] readback failed:', e && e.message);
+    return fail(9000, CODE_MSG[9000]);
+  }
+  const u = (got && got.data) || {};
+  if (!u || !u._id) {
+    console.error('[login.updateProfile] readback empty, openid=', openid);
+    return fail(9000, CODE_MSG[9000]);
   }
   return ok({
     profile: {

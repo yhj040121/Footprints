@@ -1,10 +1,12 @@
 /**
- * smoke.js —— 溪山行旅 云函数全量冒烟测试（S6-R4，纳入仓库）
+ * smoke.js —— 溪山行旅 云函数全量冒烟测试（S6-R4 纳入仓库，S7 移至 tools/）
  *
- * 运行：node cloudfunctions/scripts/smoke.js
+ * 运行：node tools/smoke.js
  * 说明：用内存 mock 替代 wx-server-sdk / ali-oss / @alicloud/pop-core，不依赖真实云环境与 OSS。
  *      覆盖 4 个云函数（login/secCheck/ossSts/delFootprint）的契约关键路径与回归：
- *        login：建档幂等 + updateProfile（avatarUrl ≤64KB / nickname 去空白 / 未传字段不动）
+ *        login：建档幂等 + updateProfile（avatarUrl ≤64KB / MIME 仅 jpeg|png|webp /
+ *                nickname 去空白 / 未传字段不动 / 未知 action 1001 / 回读失败 9000 /
+ *                更新 0 条 9000）
  *        secCheck：text 文本预检 + customTags 事务追加/去重/上限 + imageSubmit 隔离区送审 +
  *                  imagePoll + commitSave（确定性 _id 幂等 + 隔离区转正）+ commitEdit（where 过滤 +
  *                  文本先于照片 + removedKeys 差集 + 转正）+ 内容安全 2004 + 推送特权收紧
@@ -28,6 +30,7 @@ const store = {
   userDocs: new Map(),
   failRemoveDoc: false,
   failUserQuery: false,
+  failUserDocGet: false,
   lastWhere: null,
 };
 const ossStore = new Map();
@@ -133,6 +136,10 @@ const wxSdkMock = {
             const colDocs = name === 'user' ? store.userDocs : store.footprintDocs;
             return {
               get: async () => {
+                if (name === 'user' && store.failUserDocGet) {
+                  store.failUserDocGet = false;
+                  throw new Error('db down');
+                }
                 const d = colDocs.get(id);
                 if (!d) throw new Error('document not found');
                 return { data: JSON.parse(JSON.stringify(d)) };
@@ -239,7 +246,7 @@ Module._load = function (request, parent, isMain) {
 };
 
 /* ---------------- 载入 4 个云函数 ---------------- */
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '..', 'cloudfunctions');
 const loginMain = require(path.join(ROOT, 'login', 'index.js')).main;
 const secCheckMain = require(path.join(ROOT, 'secCheck', 'index.js')).main;
 const ossStsMain = require(path.join(ROOT, 'ossSts', 'index.js')).main;
@@ -286,6 +293,19 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   assert('仅更新昵称（未传头像不动）', up4.code === 0 && up4.data.profile.nickname === '新昵称' && up4.data.profile.avatarUrl === avatarB64, up4);
   const up5 = await call(loginMain, { action: 'updateProfile', avatarUrl: 'not-a-dataurl' }, openid);
   assert('avatarUrl 非 dataURL → 1001', up5.code === 1001, up5);
+  const up6 = await call(loginMain, { action: 'deleteAll', nickname: 'x' }, openid);
+  assert('未知 action → 1001（不落入普通登录，无副作用）', up6.code === 1001 && store.userDocs.size === 1, up6);
+  const up7 = await call(loginMain, { action: 'updateProfile', avatarUrl: `data:image/gif;base64,${Buffer.alloc(16, 1).toString('base64')}` }, openid);
+  assert('avatarUrl MIME 不在 jpeg|png|webp → 1001', up7.code === 1001, up7);
+  const webpB64 = `data:image/webp;base64,${Buffer.alloc(1024, 1).toString('base64')}`;
+  const up8 = await call(loginMain, { action: 'updateProfile', avatarUrl: webpB64 }, openid);
+  assert('avatarUrl MIME webp → 通过', up8.code === 0 && up8.data.profile.avatarUrl === webpB64, up8);
+  store.failUserDocGet = true;
+  const up9 = await call(loginMain, { action: 'updateProfile', nickname: '回读失败' }, openid);
+  assert('updateProfile 回读失败 → 9000（不返回空 profile）', up9.code === 9000 && up9.data === null, up9);
+  assert('回读失败时更新已生效（仅出参 9000）', store.userDocs.get(openid).nickname === '回读失败', store.userDocs.get(openid));
+  const up10 = await call(loginMain, { action: 'updateProfile', nickname: 'x' }, 'o_no_user');
+  assert('update 未命中任何文档 → 9000', up10.code === 9000, up10);
 
   console.log('=== secCheck：customTags 事务追加（去重/上限） ===');
   const t1 = await call(secCheckMain, { action: 'text', texts: [{ field: 'customTag', content: '星空' }] });
