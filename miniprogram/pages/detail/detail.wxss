@@ -27,6 +27,11 @@
   min-width: 240rpx;
 }
 
+.state-btns {
+  display: flex;
+  gap: var(--space-3);
+}
+
 .content {
   flex: 1;
   height: 100vh;
