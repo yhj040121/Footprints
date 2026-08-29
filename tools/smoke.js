@@ -7,9 +7,11 @@
  *        login：建档幂等 + updateProfile（avatarUrl ≤64KB / MIME 仅 jpeg|png|webp /
  *                nickname 去空白 / 未传字段不动 / 未知 action 1001 / 回读失败 9000 /
  *                更新 0 条 9000）
- *        secCheck：text 文本预检 + customTags 事务追加/去重/上限 + imageSubmit 隔离区送审 +
- *                  imagePoll + commitSave（确定性 _id 幂等 + 隔离区转正）+ commitEdit（where 过滤 +
- *                  文本先于照片 + removedKeys 差集 + 转正）+ 内容安全 2004 + 推送特权收紧
+ *        secCheck：text 文本预检 + customTags 事务追加/去重/上限 + imageSubmit 隔离区同步送审（S7-R2 imgSecCheck）+
+ *                  imagePoll + commitSave（确定性 _id 幂等 + 隔离区转正 + tags ≤3 个/单个 ≤6 字/
+ *                  全部命中 customTags 无预设豁免）+ commitEdit（where 过滤 + 文本先于照片 +
+ *                  removedKeys 差集 + 转正 + 编辑存量标签豁免/新增项须命中 customTags）+
+ *                  内容安全 2004 + 推送特权收紧
  *        ossSts：issueUpload 隔离区签发/冻结/复用/去重 + sign 批量 in 归属核验
  *        delFootprint：两阶段删除 + allSettled 部分失败恢复 + 重试入口自动恢复 + 定时收紧
  *      退出码：0 = 全绿，1 = 有用例失败。
@@ -181,6 +183,7 @@ wxSdkMock.openapi.security.msgSecCheck = async () => {
   return { errCode: 0, errMsg: 'openapi success', result: { suggest: 'pass' } };
 };
 wxSdkMock.openapi.security.mediaCheckAsync = async () => ({ errCode: 0, trace_id: 'trace_1' });
+wxSdkMock.openapi.security.imgSecCheck = async () => ({ errCode: 0, errMsg: 'openapi success', result: { suggest: 'pass' } }); // S7-R2 同步审核
 
 /* ---------------- mock：ali-oss / @alicloud/pop-core ---------------- */
 function makeOss() {
@@ -228,7 +231,38 @@ function makeOss() {
 }
 
 const origLoad = Module._load;
+/** https mock（S7-R2 适配）：security.js fetchBuffer 经 https.get 拉签名 URL 的缩放图，直接回 mock 字节 */
+const httpsMock = {
+  get(url, cb) {
+    const res = {
+      statusCode: 200,
+      resume() {},
+      _h: null,
+      on(ev, fn) {
+        if (!this._h) this._h = {};
+        this._h[ev] = fn;
+        return this;
+      },
+    };
+    const req = {
+      on() {
+        return this;
+      },
+      setTimeout() {
+        return this;
+      },
+      destroy() {},
+    };
+    setImmediate(() => {
+      cb(res);
+      if (res._h && res._h.data) res._h.data(Buffer.from('mock-image-bytes'));
+      if (res._h && res._h.end) res._h.end();
+    });
+    return req;
+  },
+};
 Module._load = function (request, parent, isMain) {
+  if (request === 'https') return httpsMock; // 仅影响 fetchBuffer 与 login code2Session（smoke 不触发后者）
   if (request === 'wx-server-sdk') return wxSdkMock;
   if (request === 'ali-oss') return makeOss;
   if (request === '@alicloud/pop-core') {
@@ -345,16 +379,23 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   assert('issueUpload 重复 photoId → 1001', dupIssue.code === 1001, dupIssue);
   ossStore.set(imgKey, { content: Buffer.from('a') });
   const rSubmit = await call(secCheckMain, { action: 'imageSubmit', photoId: PID });
-  assert('imageSubmit 隔离区送审 pending', rSubmit.code === 0 && rSubmit.data.status === 'pending', rSubmit);
+  assert('imageSubmit 隔离区同步送审（imgSecCheck）→ 终态 pass', rSubmit.code === 0 && rSubmit.data.status === 'pass', rSubmit);
   const dupPoll = await call(secCheckMain, { action: 'imagePoll', checkIds: [PID, PID] });
   assert('imagePoll 重复 checkId → 1001', dupPoll.code === 1001, dupPoll);
   const t1Task = JSON.parse(ossStore.get(`sec-check/task/${PID}.json`).content);
   t1Task.status = 'pass';
   ossStore.set(`sec-check/task/${PID}.json`, { content: Buffer.from(JSON.stringify(t1Task)) });
 
-  const baseSave = { clientSaveId: CID, date: '2026-08-29', place: '无锡', note: '', tags: ['山水'], photos: [{ photoId: PID }] };
+  // S7-R4：tags 须命中本人 customTags（预设标签已移除）；此时 customTags=['沙漠']
+  const baseSave = { clientSaveId: CID, date: '2026-08-29', place: '无锡', note: '', tags: ['沙漠'], photos: [{ photoId: PID }] };
   const dupPhoto = await call(secCheckMain, { action: 'commitSave', ...baseSave, photos: [{ photoId: PID }, { photoId: PID }] });
   assert('commitSave 重复 photoId → 1001', dupPhoto.code === 1001, dupPhoto);
+  const tTooMany = await call(secCheckMain, { action: 'commitSave', ...baseSave, tags: ['沙漠', '星空', '人文', '徒步'] });
+  assert('commitSave tags >3 个 → 1001', tTooMany.code === 1001, tTooMany);
+  const tTooLong = await call(secCheckMain, { action: 'commitSave', ...baseSave, tags: ['超过六个字标签'] });
+  assert('commitSave 单个 tag >6 字 → 1001', tTooLong.code === 1001, tTooLong);
+  const tNoPreset = await call(secCheckMain, { action: 'commitSave', ...baseSave, tags: ['山水'] });
+  assert('commitSave 旧预设标签（非 customTags）→ 1001，无预设豁免', tNoPreset.code === 1001, tNoPreset);
   const c1 = await call(secCheckMain, { action: 'commitSave', ...baseSave });
   const fid = hash(openid, CID);
   assert('commitSave 转正 + 确定性 _id', c1.code === 0 && c1.data.footprintId === fid, c1);
@@ -366,8 +407,15 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   console.log('=== secCheck：commitEdit 顺序/where/差集 ===');
   const e0 = await call(secCheckMain, { action: 'commitEdit', ...baseSave, footprintId: fid, photos: [], removedKeys: [] }, 'o_other');
   assert('越权 commitEdit → 1004', e0.code === 1004, e0);
-  const e1 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['山水'], photos: [{ key: travelKey }], removedKeys: [] });
-  assert('commitEdit 正常（无照片变更）', e1.code === 0, e1);
+  // S7-R4：编辑场景存量标签豁免——把 '沙漠' 从本人 customTags 移出（模拟标签库变化/预设移除），
+  // 存量记录带 '沙漠' 编辑其他字段仍应放行（保留项豁免）
+  store.userDocs.set(openid, { ...store.userDocs.get(openid), customTags: ['星空'] });
+  const e1 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠'], photos: [{ key: travelKey }], removedKeys: [] });
+  assert('commitEdit 存量标签豁免（customTags 已不含存量标签）', e1.code === 0, e1);
+  const e2 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠', '火星'], photos: [{ key: travelKey }], removedKeys: [] });
+  assert('commitEdit 新增项未命中 customTags → 1001', e2.code === 1001, e2);
+  const e3 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠', '星空'], photos: [{ key: travelKey }], removedKeys: [] });
+  assert('commitEdit 新增项命中 customTags → 通过', e3.code === 0, e3);
 
   console.log('=== ossSts.sign 批量 in 查询 ===');
   const s1 = await call(ossStsMain, { action: 'sign', items: [{ key: travelKey }] });

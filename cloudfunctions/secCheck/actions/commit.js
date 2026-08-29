@@ -15,9 +15,9 @@
  *     不得先读完整文档再比对 owner（防泄露记录存在性）
  */
 const { BizError, ok } = require('../lib/errors');
-const { UUID_RE, KEY_RE, PRESET_TAGS, deterministicFootprintId } = require('../lib/constants');
+const { UUID_RE, KEY_RE, deterministicFootprintId } = require('../lib/constants');
 const { ossClient } = require('../lib/oss');
-const { validateSaveInput, validateTags } = require('../lib/validate');
+const { validateSaveInput, validateTags, validateTagsEdit } = require('../lib/validate');
 const { textFinalCheck, verifyPhotos, promotePhotos } = require('../lib/security');
 
 // db 懒获取：index.js 顶层 cloud.init() 之后（首次调用时）才创建，避免 require 先于 init
@@ -60,7 +60,7 @@ function toMs(ts) {
  * action = "commitSave"
  * 顺序（任一失败即整体失败、不写库）：
  *   1. 幂等：辅助标记命中核验归属 → 确定性 _id 主幂等（add 冲突回读）
- *   2. 文本终审：place/note/非预设 tags 重过 msgSecCheck
+ *   2. 文本终审：place/note/tags（S7-R4：预设已移除，tags 全部按自定义标签重审）重过 msgSecCheck
  *   3. 照片终审（S6-R2）：task pass+openid / 绑定对象（imgKey+travelKey）/ HEAD 隔离区 >0
  *   4. 转正（S6-R2）：服务端 CopyObject 隔离区 → travel/（同字节；失败 3001 不写库）
  *   5. 写 footprint（data 内指定确定性 _id，photos[].key=travelKey，createdAt=serverDate）
@@ -110,11 +110,12 @@ async function handleCommitSave(event, openid) {
   await validateTags(input.tags, openid);
 
   // ---- 步骤 2：文本终审（不信任前端预检，FR-02 验收 7） ----
+  // S7-R4：预设标签已移除，tags 全部命中本人 customTags（validateTags），全部按自定义标签重审
   await textFinalCheck(
     [
       { field: 'place', content: input.place },
       { field: 'note', content: input.note },
-    ].concat(input.tags.filter((t) => !PRESET_TAGS.includes(t)).map((t) => ({ field: 'customTag', content: t }))),
+    ].concat(input.tags.map((t) => ({ field: 'customTag', content: t }))),
     openid
   );
 
@@ -205,19 +206,20 @@ async function handleCommitEdit(event, openid) {
   if (!fp) throw new BizError(1004);
 
   const input = validateSaveInput(event);
-  await validateTags(input.tags, openid);
+  // S7-R4：编辑场景存量标签豁免——新增项须命中本人 customTags，保留项（原文档已有）放行
+  await validateTagsEdit(input.tags, openid, new Set(fp.tags || []));
 
   const client = ossClient();
   const oldKeys = (fp.photos || []).map((p) => p.key).filter((k) => typeof k === 'string');
 
   // S6-R4：变更文本重审（先于照片，对齐契约 §1.2 顺序）——与原文比对，未变文本跳过；
-  // 预设标签/日期不重审（FR-13）
+  // 保留标签/日期不重审（FR-13；S7-R4：预设清单已移除，仅新增项重审）
   const diffItems = [];
   if (input.place !== (fp.place || '')) diffItems.push({ field: 'place', content: input.place });
   if (input.note !== (fp.note || '')) diffItems.push({ field: 'note', content: input.note });
   const oldTags = new Set(fp.tags || []);
   for (const t of input.tags) {
-    if (PRESET_TAGS.includes(t) || oldTags.has(t)) continue;
+    if (oldTags.has(t)) continue; // S7-R4：预设清单已移除；保留项不重审（豁免口径），仅新增项重审
     diffItems.push({ field: 'customTag', content: t });
   }
   await textFinalCheck(diffItems, openid);

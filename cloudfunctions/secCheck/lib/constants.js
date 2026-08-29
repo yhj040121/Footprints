@@ -1,9 +1,10 @@
 /**
  * lib/constants —— 常量与确定性 _id 计算（契约 §2.2/§3.1/§5.1 S6 修正/§6）
+ * S7-R4：预设标签清单已移除（commitSave/commitEdit 的 tags 全部须命中本人 user.customTags，
+ *         上限 ≤3 个、单个 ≤6 字，见 lib/validate.js）。
  */
 const crypto = require('crypto');
 
-const PRESET_TAGS = ['山水', '古镇', '徒步', '晴天', '人文', '初秋'];
 const FIELD_WHITELIST = ['note', 'place', 'customTag'];
 const MAX_TEXT_CHARS = 500;
 const MAX_TEXT_BYTES = 2500; // msgSecCheck 单次上限
@@ -22,7 +23,6 @@ function deterministicFootprintId(openid, clientSaveId) {
 }
 
 module.exports = {
-  PRESET_TAGS,
   FIELD_WHITELIST,
   MAX_TEXT_CHARS,
   MAX_TEXT_BYTES,
