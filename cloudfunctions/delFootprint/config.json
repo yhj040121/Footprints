@@ -1,0 +1,9 @@
+{
+  "triggers": [
+    {
+      "name": "orphan-clean-timer",
+      "type": "timer",
+      "config": "0 0 4,10,16,22 * * * *"
+    }
+  ]
+}
