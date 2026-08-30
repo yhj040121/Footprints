@@ -1,5 +1,6 @@
 <!-- 时间线 tab 页（FR-08）：左侧日期分组 + 竖向时间轴 + 卡片；左滑露出「导出」「删除」 -->
 <view class="page" bindtap="onListTap">
+  <image class="page-bg" src="/assets/bg/ink-bg.png" mode="aspectFill" />
   <mock-badge />
 
   <!-- 首屏加载骨架 -->

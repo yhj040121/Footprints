@@ -1,5 +1,6 @@
 <!-- 新增/编辑足迹（FR-03~07 / FR-13）：照片九宫格 + 表单 + 保存全链路 -->
 <view class="page">
+  <image class="page-bg" src="/assets/bg/ink-bg.png" mode="aspectFill" />
   <mock-badge />
 
   <!-- 编辑模式提示条 -->

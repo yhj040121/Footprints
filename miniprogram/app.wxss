@@ -130,3 +130,15 @@ view, text, input, textarea, button, image, scroll-view, swiper {
   color: var(--color-text-muted);
   font-size: var(--text-xs);
 }
+
+/* 水墨山水页背景（S8-R2）：固定铺满，z-index:-1 压在页面纸色之上、内容之下；
+   资产 assets/bg/ink-bg.png 由 tools/svg2png/convert-bg.js 从 pic/ 的 SVG 栅格化（微信 image 不支持 SVG） */
+.page-bg {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+}

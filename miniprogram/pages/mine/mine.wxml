@@ -1,5 +1,6 @@
 <!-- pages/mine/mine.wxml —— 我的 Tab（FR-14 / FR-15） -->
 <view class="mine">
+  <image class="page-bg" src="/assets/bg/ink-bg.png" mode="aspectFill" />
   <mock-badge />
 
   <!-- 头像与昵称：官方填写能力，无授权弹窗（FR-14 ①） -->
