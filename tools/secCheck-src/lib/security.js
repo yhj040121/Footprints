@@ -56,6 +56,8 @@ function securityIssue(stage, source) {
   const message = source && (source.errMsg || source.errmsg || source.message);
   return {
     stage,
+    // 结构化错误码（如 45009=当日配额耗尽）：前端据此映射中文提示，绝不向用户透出英文 errMsg
+    reasonCode: typeof code === 'number' ? code : undefined,
     reason: [code, message].filter((v) => v !== undefined && v !== null && String(v).length)
       .join(' ')
       .slice(0, 120) || 'UNKNOWN_RESPONSE'

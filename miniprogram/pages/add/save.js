@@ -8,6 +8,7 @@ const request = require('../../utils/request');
 const uuidUtil = require('../../utils/uuid');
 const db = require('../../utils/db');
 const drafts = require('../../utils/drafts');
+const errorText = require('../../utils/error-text');
 
 /** 后台草稿链落定（成功删除/失败标记）后刷新时间线（若其在页面栈中） */
 function refreshTimeline() {
@@ -207,16 +208,7 @@ module.exports = {
     if (err && err.cancelled) return;
     const draft = drafts.get(ctx.draftId) || Object.assign({ id: ctx.draftId, clientSaveId: ctx.clientSaveId, createdAt: Date.now() }, snap);
     draft.status = 'failed';
-    draft.error = (err && err.message) || '保存失败，请重试';
-    if (err && err.code === 2001) draft.error = '内容未通过安全检测，请修改';
-    if (err && err.code === 2002) draft.error = '有照片未通过安全检测，请更换';
-    if (err && err.code === 2004 && err.data && err.data.stage) {
-      const stage = err.data.stage === 'image' ? '图片检测' : '文本检测';
-      draft.error = stage + '服务异常：' + (err.data.reason || '未知错误');
-    }
-    if (err && err.transport && err.data && err.data.reason) {
-      draft.error = '云函数调用失败：' + err.data.reason;
-    }
+    draft.error = errorText.secErrorText(err);
     if (err && err.code === 2005) {
       // 换新 photoId 整链重走（恢复草稿后重试即生效）
       draft.photos = draft.photos.map((p) => Object.assign({}, p, { photoId: uuidUtil.uuid(), status: 'ready', progress: 0 }));
@@ -401,20 +393,20 @@ module.exports = {
     if (request.isFieldError(err)) {
       // 2001：定位字段；2002：定位到具体照片（状态已在轮询时标注）
       if (err.code === 2001) this.locateTextField(err);
-      this.setData({ saveError: { message: err.message, retryable: false } });
+      this.setData({ saveError: { message: errorText.secErrorText(err), retryable: false } });
       return;
     }
     if (err && err.code === 2005) { // REVIEW_MISMATCH：审核与照片对不上，需重新走审核
       this.resetReviewState();
-      this.setData({ saveError: { message: err.message, retryable: false } });
+      this.setData({ saveError: { message: errorText.secErrorText(err), retryable: false } });
       return;
     }
     if (request.isNotFound(err)) { // 1004：编辑对象已被删
-      this.setData({ saveError: { message: err.message, retryable: false } });
+      this.setData({ saveError: { message: errorText.secErrorText(err), retryable: false } });
       return;
     }
     // 2003/2004/3001/9000/网络：给重试入口（沿用同一 clientSaveId，幂等）
-    this.setData({ saveError: { message: (err && err.message) || '保存失败，请重试', retryable: true } });
+    this.setData({ saveError: { message: errorText.secErrorText(err), retryable: true } });
   },
 
   locateTextField(err) {
@@ -425,7 +417,7 @@ module.exports = {
       if (r.field === 'place') patch.placeError = '地点' + '包含不适宜内容，请修改';
       if (r.field === 'note') patch.noteError = '备注包含不适宜内容，请修改';
     });
-    if (!Object.keys(patch).length) patch.noteError = err.message;
+    if (!Object.keys(patch).length) patch.noteError = errorText.secErrorText(err);
     this.setData(patch);
   },
 

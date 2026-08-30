@@ -11,17 +11,17 @@ var __commonJS = (cb, mod) => function __require() {
 var require_errors = __commonJS({
   "tools/secCheck-src/lib/errors.js"(exports2, module2) {
     var CODE_MSG = {
-      1001: "\u63D0\u4EA4\u5185\u5BB9\u4E0D\u5B8C\u6574\u6216\u683C\u5F0F\u4E0D\u6B63\u786E",
+      1001: "\u63D0\u4EA4\u5185\u5BB9\u6709\u8BEF\uFF0C\u8BF7\u91CD\u8BD5",
       1002: "\u767B\u5F55\u6001\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u8FDB\u5165\u5C0F\u7A0B\u5E8F",
       1003: "\u65E0\u6743\u64CD\u4F5C\u8BE5\u6570\u636E",
       1004: "\u8BB0\u5F55\u4E0D\u5B58\u5728\u6216\u5DF2\u88AB\u5220\u9664",
-      2001: "\u6587\u672C\u5305\u542B\u4E0D\u9002\u5B9C\u5185\u5BB9\uFF0C\u8BF7\u4FEE\u6539\u540E\u518D\u8BD5",
-      2002: "\u6709\u7167\u7247\u672A\u901A\u8FC7\u5B89\u5168\u68C0\u6D4B\uFF0C\u8BF7\u66F4\u6362\u540E\u518D\u8BD5",
-      2003: "\u5BA1\u6838\u8D85\u65F6\uFF0C\u6682\u65E0\u6CD5\u4FDD\u5B58\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5",
-      2004: "\u6682\u65E0\u6CD5\u4FDD\u5B58\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5",
-      2005: "\u7167\u7247\u4E0E\u5BA1\u6838\u7ED3\u679C\u4E0D\u4E00\u81F4\uFF0C\u8BF7\u91CD\u65B0\u4FDD\u5B58",
-      3001: "\u7167\u7247\u670D\u52A1\u5F02\u5E38\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5",
-      9e3: "\u7CFB\u7EDF\u7E41\u5FD9\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5"
+      2001: "\u6587\u5B57\u542B\u8FDD\u89C4\u5185\u5BB9\uFF0C\u8BF7\u4FEE\u6539",
+      2002: "\u7167\u7247\u672A\u901A\u8FC7\u5B89\u5168\u68C0\u6D4B\uFF0C\u8BF7\u66F4\u6362",
+      2003: "\u5BA1\u6838\u8D85\u65F6\uFF0C\u8BF7\u91CD\u8BD5",
+      2004: "\u5B89\u5168\u68C0\u6D4B\u670D\u52A1\u4E0D\u53EF\u7528\uFF0C\u8BF7\u53CD\u9988\u5BA2\u670D\u5904\u7406",
+      2005: "\u7167\u7247\u5BA1\u6838\u72B6\u6001\u5F02\u5E38\uFF0C\u8BF7\u91CD\u8BD5",
+      3001: "\u7167\u7247\u670D\u52A1\u4E0D\u53EF\u7528\uFF0C\u8BF7\u53CD\u9988\u5BA2\u670D\u5904\u7406",
+      9e3: "\u7CFB\u7EDF\u7E41\u5FD9\uFF0C\u8BF7\u53CD\u9988\u5BA2\u670D\u5904\u7406"
     };
     var BizError2 = class extends Error {
       constructor(code, data) {
@@ -220,6 +220,8 @@ var require_security = __commonJS({
       const message = source && (source.errMsg || source.errmsg || source.message);
       return {
         stage,
+        // 结构化错误码（如 45009=当日配额耗尽）：前端据此映射中文提示，绝不向用户透出英文 errMsg
+        reasonCode: typeof code === "number" ? code : void 0,
         reason: [code, message].filter((v) => v !== void 0 && v !== null && String(v).length).join(" ").slice(0, 120) || "UNKNOWN_RESPONSE"
       };
     }
