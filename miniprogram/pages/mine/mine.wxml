@@ -46,9 +46,6 @@
     </view>
   </view>
 
-  <!-- 底部私密文案（FR-14） -->
-  <view class="footer fp-hint">私密记录，仅自己可见</view>
-
   <!-- 头像压缩隐藏画布（chooseAvatar → base64 dataURL ≤64KB，契约 §2.1） -->
   <canvas type="2d" id="avatarCanvas" class="hidden-canvas" />
 

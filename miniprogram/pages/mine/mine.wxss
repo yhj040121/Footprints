@@ -114,13 +114,6 @@
   background: var(--color-border-subtle);
 }
 
-/* ---------- 底部私密文案 ---------- */
-.footer {
-  margin-top: auto;
-  padding: var(--space-6) 0 180rpx; /* 底部留白避开自定义 tabBar */
-  text-align: center;
-}
-
 /* ---------- 弹层（遮罩 + 卡片） ---------- */
 .mask {
   position: fixed;
