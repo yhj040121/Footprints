@@ -280,6 +280,15 @@ Page(Object.assign({
     this.setData(data);
   },
 
+  // 同时更新照片对象本身与页面渲染数据：编辑链中的 photo 来自 this.data.photos，
+  // 乐观保存链中的 photo 来自独立快照。后台链离开页面后仍必须推进快照状态，
+  // 否则上传/送审虽成功，commitSave 仍会把照片误判为未审核。
+  updatePhoto(photo, patch) {
+    if (!photo) return;
+    Object.assign(photo, patch);
+    if (photo.uid !== undefined && photo.uid !== null) this.setPhoto(photo.uid, patch);
+  },
+
   // ---------- 保存/上传/审核/提交：已拆至同目录 save.js / upload.js / review.js（Object.assign 合并） ----------
 
   // ---------- 编辑模式（FR-13） ----------

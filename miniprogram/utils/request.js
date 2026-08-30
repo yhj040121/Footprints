@@ -77,8 +77,11 @@ function callFunction(name, data) {
       // 传输异常/云函数无应答（非信封错误）：统一夹为可识别错误（§5.4）。
       // 信封内返回的 { code } 业务/系统错误已在此前抛为 CloudError，原样透传。
       if (err instanceof CloudError) throw err;
+      const rawMessage = String((err && (err.errMsg || err.message)) || 'UNKNOWN_TRANSPORT_ERROR').slice(0, 160);
+      console.error('[Footprints] cloud call transport error:', rawMessage, err);
       const e = new CloudError(9000, '网络异常，请检查网络后重试');
       e.transport = true; // 无应答标志：服务端可能已执行，前端不得直接断言失败
+      e.data = { stage: 'transport', reason: rawMessage };
       throw e;
     });
 }

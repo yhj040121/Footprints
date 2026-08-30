@@ -27,7 +27,11 @@ module.exports = {
   async issueAndUpload(toUpload, ctx) {
     const data = await request.callFunction('ossSts', {
       action: 'issueUpload',
-      items: toUpload.map((p) => ({ photoId: p.photoId, ext: p.ext, date: this.data.date }))
+      items: toUpload.map((p) => ({
+        photoId: p.photoId,
+        ext: p.ext,
+        date: (ctx && ctx.date) || this.data.date
+      }))
     });
     if (ctx) this.throwIfCancelled(ctx);
     const byPhotoId = {};
@@ -39,20 +43,20 @@ module.exports = {
       const upload = byPhotoId[p.photoId];
       if (!upload) {
         failed++;
-        this.setPhoto(p.uid, { status: 'upload-failed' });
+        this.updatePhoto(p, { status: 'upload-failed' });
         return Promise.resolve();
       }
-      this.setPhoto(p.uid, { status: 'uploading', progress: 0 });
+      this.updatePhoto(p, { status: 'uploading', progress: 0 });
       return oss.uploadPhoto(upload, p.tempFilePath, (percent) => {
-        this.setPhoto(p.uid, { progress: percent });
+        this.updatePhoto(p, { progress: percent });
       }).then(() => {
-        this.setPhoto(p.uid, { status: 'uploaded', progress: 100 });
+        this.updatePhoto(p, { status: 'uploaded', progress: 100 });
         return this.submitReview(p, ctx).catch((err) => {
           if (!reviewFailed) reviewFailed = err;
         });
       }, () => {
         failed++;
-        this.setPhoto(p.uid, { status: 'upload-failed' });
+        this.updatePhoto(p, { status: 'upload-failed' });
       });
     }));
 

@@ -6,8 +6,61 @@
  * （errCode=0 且 suggest≠pass）才由调用方按 2001 处理。
  */
 const cloud = require('wx-server-sdk');
+const crypto = require('crypto');
 const https = require('https');
 const { BizError } = require('./errors');
+
+// 当日文本查重缓存：未上架小程序 msgSecCheck 仅 100 次/天（45009=日配额耗尽），
+// 同一用户当天重复提交相同内容（反复测试/编辑未改动字段）时复用已通过的结论，不再消耗配额。
+// 仅缓存 pass 结论；负结论不缓存（整改后重试仍真实送检）。缓存随自然日（东八区）整体失效。
+const TEXT_CACHE_MAX = 50;
+
+function getDb() {
+  return require('wx-server-sdk').database();
+}
+
+function todayCN() {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+}
+
+function textHash(item) {
+  return crypto.createHash('sha256').update(`v1\u0000${item.field}\u0000${item.content}`, 'utf8').digest('hex').slice(0, 24);
+}
+
+/** 读本人当日查重缓存（无文档/过期/异常 → null，降级为真实送检） */
+async function readTextCache(openid) {
+  try {
+    const got = await getDb().collection('user').doc(openid).get();
+    const c = got && got.data && got.data.secTextCache;
+    if (!c || c.d !== todayCN() || !Array.isArray(c.h)) return null;
+    return c;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** 追加当日哈希并裁剪至上限；写失败静默（缓存只是省配额手段，绝不阻塞保存主流程） */
+async function writeTextCache(openid, prev, hash) {
+  try {
+    const today = todayCN();
+    const base = prev && prev.d === today ? prev.h : [];
+    const h = base.includes(hash) ? base : [...base, hash].slice(-TEXT_CACHE_MAX);
+    await getDb().collection('user').doc(openid).update({ data: { secTextCache: { d: today, h } } });
+  } catch (e) {
+    console.error('[secCheck.security] text cache write skipped:', e && e.errMsg || e);
+  }
+}
+
+function securityIssue(stage, source) {
+  const code = source && (source.errCode || source.errcode || source.code);
+  const message = source && (source.errMsg || source.errmsg || source.message);
+  return {
+    stage,
+    reason: [code, message].filter((v) => v !== undefined && v !== null && String(v).length)
+      .join(' ')
+      .slice(0, 120) || 'UNKNOWN_RESPONSE'
+  };
+}
 
 /**
  * 单段文本 msgSecCheck。
@@ -24,7 +77,7 @@ async function checkText(item, openid) {
     res = await cloud.openapi.security.msgSecCheck({ content: item.content, version: 2, scene: 2, openid });
   } catch (e) {
     console.error('[secCheck.security] msgSecCheck error:', e);
-    throw new BizError(2004);
+    throw new BizError(2004, securityIssue('text', e));
   }
   // S6-R3：errMsg 仅作异常判据——非空且不以官方成功形态结尾（`:ok` / `openapi success`）→ 2004
   const errMsg = res && res.errMsg;
@@ -34,7 +87,7 @@ async function checkText(item, openid) {
     (typeof errMsg === 'string' && errMsg.length > 0 && !/^openapi success$|:ok$/i.test(errMsg));
   if (abnormal) {
     console.error('[secCheck.security] msgSecCheck abnormal response:', JSON.stringify(res).slice(0, 500));
-    throw new BizError(2004);
+    throw new BizError(2004, securityIssue('text', res));
   }
   // result.suggest 合法性：pass → 通过；其他合法业务值（risky/review 等）→ 业务性不通过（2001）
   const suggest = res.result && res.result.suggest;
@@ -42,14 +95,30 @@ async function checkText(item, openid) {
   if (typeof suggest === 'string' && suggest.length > 0) return { pass: false };
   // result 缺失或 suggest 缺失/非法 → 响应形态异常 → 2004（不误判 2001）
   console.error('[secCheck.security] msgSecCheck result invalid:', JSON.stringify(res).slice(0, 500));
-  throw new BizError(2004);
+  throw new BizError(2004, { stage: 'text', reason: 'RESULT_MISSING' });
+}
+
+/**
+ * 带当日查重缓存的文本检测（text 预检与 commit 终审共用）：
+ * 同一用户当日已检通过的相同 field+content → 直接复用 pass，不调 msgSecCheck；
+ * 未命中/缓存异常 → 真实送检，通过后回写缓存。
+ * @returns {Promise<{pass: boolean, cached?: boolean}>}
+ * @throws BizError 2004（同 checkText）
+ */
+async function checkTextCached(item, openid) {
+  const hash = textHash(item);
+  const cached = await readTextCache(openid);
+  if (cached && cached.h.includes(hash)) return { pass: true, cached: true };
+  const r = await checkText(item, openid);
+  if (r.pass) await writeTextCache(openid, cached, hash);
+  return r;
 }
 
 /** 文本终审：逐项 msgSecCheck，不过 → 2001（results 指明字段）；接口异常/异常返回 → 2004 */
 async function textFinalCheck(items, openid) {
   for (const item of items) {
     if (!item.content) continue;
-    const { pass } = await checkText(item, openid);
+    const { pass } = await checkTextCached(item, openid);
     if (!pass) throw new BizError(2001, { results: [{ field: item.field, pass: false }] });
   }
 }
@@ -141,7 +210,7 @@ async function checkImageSync(buffer, openid) {
   } catch (e) {
     if (e && (e.errCode === 87014 || /87014|risky/i.test(String(e.errMsg || '')))) return { pass: false };
     console.error('[secCheck.security] imgSecCheck error:', e);
-    throw new BizError(2004);
+    throw new BizError(2004, securityIssue('image', e));
   }
   const errMsg = res && res.errMsg;
   if (res && res.errCode === 87014) return { pass: false };
@@ -151,7 +220,7 @@ async function checkImageSync(buffer, openid) {
     (typeof errMsg === 'string' && errMsg.length > 0 && !/^openapi success$|:ok$/i.test(errMsg));
   if (abnormal) {
     console.error('[secCheck.security] imgSecCheck abnormal response:', JSON.stringify(res).slice(0, 500));
-    throw new BizError(2004);
+    throw new BizError(2004, securityIssue('image', res));
   }
   return { pass: true };
 }
@@ -171,4 +240,4 @@ function fetchBuffer(url, timeoutMs = 10000) {
   });
 }
 
-module.exports = { checkText, textFinalCheck, verifyPhotos, promotePhotos, checkImageSync, fetchBuffer };
+module.exports = { checkText, checkTextCached, textFinalCheck, verifyPhotos, promotePhotos, checkImageSync, fetchBuffer };

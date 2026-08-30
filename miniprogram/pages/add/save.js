@@ -120,6 +120,7 @@ module.exports = {
       round: ++this._saveSeq,
       draftId,
       clientSaveId,
+      date: snap.date,
       photoIds: snap.photos.map((p) => p.photoId)
     };
     this.runDraftSave(ctx, snap).then(
@@ -140,6 +141,7 @@ module.exports = {
       photos: this.data.photos
         .filter((p) => !p.isOld)
         .map((p) => ({
+          uid: p.uid,
           photoId: p.photoId,
           tempFilePath: p.tempFilePath,
           ext: p.ext,
@@ -208,6 +210,13 @@ module.exports = {
     draft.error = (err && err.message) || '保存失败，请重试';
     if (err && err.code === 2001) draft.error = '内容未通过安全检测，请修改';
     if (err && err.code === 2002) draft.error = '有照片未通过安全检测，请更换';
+    if (err && err.code === 2004 && err.data && err.data.stage) {
+      const stage = err.data.stage === 'image' ? '图片检测' : '文本检测';
+      draft.error = stage + '服务异常：' + (err.data.reason || '未知错误');
+    }
+    if (err && err.transport && err.data && err.data.reason) {
+      draft.error = '云函数调用失败：' + err.data.reason;
+    }
     if (err && err.code === 2005) {
       // 换新 photoId 整链重走（恢复草稿后重试即生效）
       draft.photos = draft.photos.map((p) => Object.assign({}, p, { photoId: uuidUtil.uuid(), status: 'ready', progress: 0 }));
@@ -215,7 +224,8 @@ module.exports = {
     }
     drafts.upsert(draft);
     draftCleanup.forEachPhotoCleanup(this, ctx);
-    wx.showToast({ title: '有 1 条足迹未保存成功，可稍后在时间线处理', icon: 'none' });
+    console.error('[Footprints] draft publish failed:', err && err.code, draft.error, err && err.data);
+    wx.showToast({ title: draft.error, icon: 'none', duration: 4000 });
     refreshTimeline();
   },
 

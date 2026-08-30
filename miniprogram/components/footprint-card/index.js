@@ -8,7 +8,10 @@ Component({
 
   methods: {
     onTap() {
-      this.triggerEvent('tap', { id: this.data.record._id });
+      this.triggerEvent('tap', {
+        id: this.data.record._id,
+        isDraft: !!this.data.record.isDraft
+      });
     }
   }
 });

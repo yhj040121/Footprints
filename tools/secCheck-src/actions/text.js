@@ -10,7 +10,7 @@
  */
 const { BizError, ok, fail } = require('../lib/errors');
 const { FIELD_WHITELIST, MAX_TEXT_CHARS, MAX_TEXT_BYTES, MAX_CUSTOM_TAG_CHARS } = require('../lib/constants');
-const { checkText } = require('../lib/security');
+const { checkTextCached } = require('../lib/security');
 
 // db 懒获取：index.js 顶层 cloud.init() 之后（首次调用时）才创建
 function getDb() {
@@ -89,7 +89,7 @@ async function handleText(event, openid) {
 
   const results = [];
   for (const item of items) {
-    const { pass } = await checkText(item, openid); // 接口异常/异常返回 → 2004（lib/security）
+    const { pass } = await checkTextCached(item, openid); // 当日查重缓存命中 → 不耗 msgSecCheck 配额；接口异常/异常返回 → 2004（lib/security）
     results.push({ field: item.field, pass });
   }
 

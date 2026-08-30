@@ -23,17 +23,40 @@ module.exports = {
     if (ctx) this.throwIfCancelled(ctx);
     const submitAt = Date.now();
     this._reviewSubmitAt[photo.photoId] = submitAt;
-    this.setPhoto(photo.uid, { status: 'checking' });
+    this.updatePhoto(photo, { status: 'checking' });
     return request.callFunction('secCheck', {
       action: 'imageSubmit',
       photoId: photo.photoId
     }).then((data) => {
       if (ctx) this.throwIfCancelled(ctx);
+      // 当前云函数优先同步审核，直接返回 pass/reject/error。同步终态必须立即消费，
+      // 仅 pending 才进入 imagePoll，避免任务对象刚写入时立刻回读造成误判。
+      if (data && data.status === 'pass') {
+        delete this._reviewSubmitAt[photo.photoId];
+        this.updatePhoto(photo, { status: 'checked' });
+        return data;
+      }
+      if (data && data.status === 'reject') {
+        delete this._reviewSubmitAt[photo.photoId];
+        this.updatePhoto(photo, { status: 'review-failed' });
+        const rejected = new CloudError(2002, '有照片未通过安全检测，请更换后再试');
+        rejected.reviewTerminal = true;
+        throw rejected;
+      }
+      if (data && data.status === 'error') {
+        delete this._reviewSubmitAt[photo.photoId];
+        this.updatePhoto(photo, { status: 'uploaded' });
+        const detail = String(data.err || '').replace(/^SYNC_FAIL:\s*/i, '').slice(0, 80);
+        const failed = new CloudError(2004, detail ? '图片检测失败：' + detail : '图片检测暂不可用，请稍后再试');
+        failed.reviewTerminal = true;
+        throw failed;
+      }
       return data;
     }).catch((err) => {
       delete this._reviewSubmitAt[photo.photoId];
       if (ctx && ctx.cancelled) return Promise.reject(err); // 非终止性错误：状态已由流水线处理
-      this.setPhoto(photo.uid, { status: 'uploaded' }); // 送审失败回退 uploaded，下次保存补交重送
+      if (err && err.reviewTerminal) throw err;
+      this.updatePhoto(photo, { status: 'uploaded' }); // 送审失败回退 uploaded，下次保存补交重送
       throw err;
     });
   },
@@ -68,6 +91,7 @@ module.exports = {
     let rejectedCount = 0;
     let timeoutCount = 0;
     let errorCount = 0;
+    let errorReason = '';
 
     try {
       while (Object.keys(pending).length) {
@@ -90,34 +114,35 @@ module.exports = {
           if (expired) {
             // 超期：pass/reject 为服务端权威终态，照常消费（防 9 图慢审在 50s 截断时功亏一篑）
             if (r.status === 'pass') {
-              this.setPhoto(p.uid, { status: 'checked' });
+              this.updatePhoto(p, { status: 'checked' });
               delete this._reviewSubmitAt[p.photoId];
               delete pending[r.checkId];
               return;
             }
             if (r.status === 'reject') {
-              this.setPhoto(p.uid, { status: 'review-failed' });
+              this.updatePhoto(p, { status: 'review-failed' });
               delete this._reviewSubmitAt[p.photoId];
               rejectedCount++;
               delete pending[r.checkId];
               return;
             }
-            this.setPhoto(p.uid, { status: 'uploaded' }); // 已传未审：重试时同 photoId 重新送审
+            this.updatePhoto(p, { status: 'uploaded' }); // 已传未审：重试时同 photoId 重新送审
             delete this._reviewSubmitAt[p.photoId];
             timeoutCount++;
             delete pending[r.checkId];
           } else if (r.status === 'pass') {
-            this.setPhoto(p.uid, { status: 'checked' });
+            this.updatePhoto(p, { status: 'checked' });
             delete this._reviewSubmitAt[p.photoId];
             delete pending[r.checkId];
           } else if (r.status === 'reject') {
-            this.setPhoto(p.uid, { status: 'review-failed' });
+            this.updatePhoto(p, { status: 'review-failed' });
             delete this._reviewSubmitAt[p.photoId];
             rejectedCount++;
             delete pending[r.checkId];
           } else if (r.status === 'error') {
-            this.setPhoto(p.uid, { status: 'uploaded' }); // 重试时同 photoId 重新送审
+            this.updatePhoto(p, { status: 'uploaded' }); // 重试时同 photoId 重新送审
             delete this._reviewSubmitAt[p.photoId];
+            if (!errorReason && r.err) errorReason = String(r.err).replace(/^SYNC_FAIL:\s*/i, '').slice(0, 80);
             errorCount++;
             delete pending[r.checkId];
           }
@@ -127,7 +152,7 @@ module.exports = {
     } catch (err) {
       // 轮询中断（阶段超时/网络/取消）：仍 pending 的照片打回 uploaded，不留卡在 checking 的残留态
       Object.keys(pending).forEach((id) => {
-        this.setPhoto(pending[id].uid, { status: 'uploaded' });
+        this.updatePhoto(pending[id], { status: 'uploaded' });
         delete this._reviewSubmitAt[id];
       });
       throw err;
@@ -135,7 +160,9 @@ module.exports = {
 
     if (rejectedCount) throw new CloudError(2002, '有照片未通过安全检测，请更换后再试');
     if (timeoutCount) throw new CloudError(2003, '审核超时，暂无法保存，请稍后再试');
-    if (errorCount) throw new CloudError(2004, '暂无法保存，请稍后再试');
+    if (errorCount) {
+      throw new CloudError(2004, errorReason ? '图片检测失败：' + errorReason : '图片检测暂不可用，请稍后再试');
+    }
   },
 
   // 公开入口：返回 { stageStartAt, promise }——阶段起点取「最早一张的提交发起时间」后立即启动轮询，

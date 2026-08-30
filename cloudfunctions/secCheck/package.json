@@ -7,7 +7,7 @@
     "node": ">=16"
   },
   "dependencies": {
-    "wx-server-sdk": "^2.6.3",
+    "wx-server-sdk": "^4.0.2",
     "ali-oss": "^6.18.1"
   }
 }

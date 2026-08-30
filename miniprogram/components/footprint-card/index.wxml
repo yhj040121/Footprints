@@ -17,7 +17,7 @@
     <view class="note">{{record.note}}</view>
     <!-- 后台保存过程保持无感；仅失败时提示并允许点击恢复处理 -->
     <view wx:if="{{record.isDraft && record.draftStatus === 'failed'}}" class="draft-badge">
-      <text>未保存成功 · 点击处理</text>
+      <text>{{record.draftError || '未保存成功'}} · 点击处理</text>
     </view>
   </view>
 </view>

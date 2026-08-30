@@ -260,7 +260,7 @@ Page({
     if (this.data.expandedId) { this.collapseAll(); return; } // 点任意卡片先收起展开项
     // 草稿卡：恢复进表单（无云端记录，不打开详情页）
     const item = this.data.list.find((it) => it._id === id);
-    if (item && item.isDraft) {
+    if (e.detail.isDraft || (item && item.isDraft) || drafts.get(id)) {
       getApp().globalData.restoreDraftId = id;
       wx.switchTab({ url: '/pages/add/add' });
       return;
