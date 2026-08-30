@@ -5,12 +5,14 @@
  * 说明：用内存 mock 替代 wx-server-sdk / ali-oss / @alicloud/pop-core，不依赖真实云环境与 OSS。
  *      覆盖 4 个云函数（login/secCheck/ossSts/delFootprint）的契约关键路径与回归：
  *        login：建档幂等 + updateProfile（avatarUrl ≤64KB / MIME 仅 jpeg|png|webp /
- *                nickname 去空白 / 未传字段不动 / 未知 action 1001 / 回读失败 9000 /
+ *                nickname 去空白 / removeCustomTags 删除标签：只删不加/未命中忽略/删除-only/
+ *                删除+改昵称混合/删历史 7~10 字存量标签 / 未知 action 1001 / 回读失败 9000 /
  *                更新 0 条 9000）
- *        secCheck：text 文本预检 + customTags 事务追加/去重/上限 + imageSubmit 隔离区同步送审（S7-R2 imgSecCheck）+
- *                  imagePoll + commitSave（确定性 _id 幂等 + 隔离区转正 + tags ≤3 个/单个 ≤6 字/
- *                  全部命中 customTags 无预设豁免）+ commitEdit（where 过滤 + 文本先于照片 +
- *                  removedKeys 差集 + 转正 + 编辑存量标签豁免/新增项须命中 customTags）+
+ *        secCheck：text 文本预检 + customTags 事务追加/去重/上限（新建单个 1~6 字，7 字拒绝）+
+ *                  imageSubmit 隔离区同步送审（S7-R2 imgSecCheck）+ imagePoll + commitSave
+ *                  （确定性 _id 幂等 + 隔离区转正 + tags ≤3 个/单个 ≤6 字/全部命中 customTags 无预设豁免）+
+ *                  commitEdit（where 过滤 + 文本先于照片 + removedKeys 差集 + 转正 +
+ *                  存量标签豁免：保留项整体放行（含 4~10 个/7~10 字）、仅新增项 3/6+customTags）+
  *                  内容安全 2004 + 推送特权收紧
  *        ossSts：issueUpload 隔离区签发/冻结/复用/去重 + sign 批量 in 归属核验
  *        delFootprint：两阶段删除 + allSettled 部分失败恢复 + 重试入口自动恢复 + 定时收紧
@@ -340,14 +342,38 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   assert('回读失败时更新已生效（仅出参 9000）', store.userDocs.get(openid).nickname === '回读失败', store.userDocs.get(openid));
   const up10 = await call(loginMain, { action: 'updateProfile', nickname: 'x' }, 'o_no_user');
   assert('update 未命中任何文档 → 9000', up10.code === 9000, up10);
+  // S7-R5：removeCustomTags（只删不加 / 未命中忽略 / 删除-only / 删除+改昵称混合 / 删历史 7~10 字存量标签）
+  const OLD7 = '九曲黄河万里沙'; // 7 字存量旧标签（S7-R4 前创建，删除不受 1~6 限制）
+  store.userDocs.get(openid).customTags = ['沙漠', '星空', OLD7];
+  const up11 = await call(loginMain, { action: 'updateProfile', removeCustomTags: ['沙漠'] });
+  assert(
+    '删除-only：仅删命中项，其余保留',
+    up11.code === 0 && up11.data.profile.customTags.includes('星空') && up11.data.profile.customTags.includes(OLD7) && !up11.data.profile.customTags.includes('沙漠'),
+    up11
+  );
+  const up12 = await call(loginMain, { action: 'updateProfile', removeCustomTags: ['星空'], nickname: '  新昵称  ' });
+  assert(
+    '删除+改昵称混合：一次提交均生效',
+    up12.code === 0 && up12.data.profile.nickname === '新昵称' && !up12.data.profile.customTags.includes('星空') && up12.data.profile.customTags.includes(OLD7),
+    up12
+  );
+  const up13 = await call(loginMain, { action: 'updateProfile', removeCustomTags: ['不存在标签', '绝不新增'] });
+  assert('含不存在项忽略、夹带新标签不入库', up13.code === 0 && up13.data.profile.customTags.length === 1 && up13.data.profile.customTags[0] === OLD7, up13);
+  const up14 = await call(loginMain, { action: 'updateProfile', removeCustomTags: [OLD7] });
+  assert('删除 7 字存量旧标签 → 允许（清空）', up14.code === 0 && up14.data.profile.customTags.length === 0, up14);
+  const up15 = await call(loginMain, { action: 'updateProfile', removeCustomTags: [] });
+  assert('removeCustomTags 空数组 → 1001', up15.code === 1001, up15);
+  store.userDocs.get(openid).customTags = ['沙漠']; // 恢复 secCheck 段依赖的初始标签
 
   console.log('=== secCheck：customTags 事务追加（去重/上限） ===');
   const t1 = await call(secCheckMain, { action: 'text', texts: [{ field: 'customTag', content: '星空' }] });
   assert('customTag 通过 → 事务追加并出参完整数组', t1.code === 0 && t1.data.customTags.includes('星空') && t1.data.customTags.includes('沙漠') && t1.data.customTags.length === 2, t1);
   const t2 = await call(secCheckMain, { action: 'text', texts: [{ field: 'customTag', content: '星空' }] });
   assert('重复标签去重', t2.code === 0 && t2.data.customTags.length === 2, t2);
-  const t3 = await call(secCheckMain, { action: 'text', texts: [{ field: 'customTag', content: '这个标签超过了十个字长度' }] });
-  assert('单个标签 >10 字 → 1001', t3.code === 1001, t3);
+  const t3 = await call(secCheckMain, { action: 'text', texts: [{ field: 'customTag', content: '这个标签七个字' }] });
+  assert('新建 customTag 7 字 → 1001（新建 1~6 字）', t3.code === 1001, t3);
+  const t3b = await call(secCheckMain, { action: 'text', texts: [{ field: 'customTag', content: '六个字标签测' }] });
+  assert('新建 customTag 6 字 → 通过并入列', t3b.code === 0 && t3b.data.customTags.includes('六个字标签测'), t3b);
   store.userDocs.set(openid, { ...store.userDocs.get(openid), customTags: Array.from({ length: 10 }, (_, i) => `标签${i}`) });
   const t4 = await call(secCheckMain, { action: 'text', texts: [{ field: 'customTag', content: '新标签' }] });
   assert('总数超 10 → 1001（事务回滚）', t4.code === 1001 && store.userDocs.get(openid).customTags.length === 10, t4);
@@ -416,6 +442,16 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   assert('commitEdit 新增项未命中 customTags → 1001', e2.code === 1001, e2);
   const e3 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠', '星空'], photos: [{ key: travelKey }], removedKeys: [] });
   assert('commitEdit 新增项命中 customTags → 通过', e3.code === 0, e3);
+  // S7-R5：存量旧标签豁免补格式层——保留项（数量>3、7~10 字）整体放行，仅新增项执行 3/6
+  store.footprintDocs.get(fid).tags = ['沙漠', '星光巷', '枕水人家', '七字旧标签甲乙'];
+  const e4 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠', '星光巷', '枕水人家', '七字旧标签甲乙'], photos: [{ key: travelKey }], removedKeys: [] });
+  assert('保留 4 个存量旧标签（含 7 字）整体放行', e4.code === 0, e4);
+  store.userDocs.set(openid, { ...store.userDocs.get(openid), customTags: ['星空', '新增的七字标签'] });
+  const e5 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠', '新增的七字标签'], photos: [{ key: travelKey }], removedKeys: [] });
+  assert('新增项超 6 字 → 1001（豁免仅限保留项）', e5.code === 1001, e5);
+  store.userDocs.set(openid, { ...store.userDocs.get(openid), customTags: ['星空', '新一', '新二', '新三', '新四'] });
+  const e6 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠', '新一', '新二', '新三', '新四'], photos: [{ key: travelKey }], removedKeys: [] });
+  assert('新增项超过 3 个 → 1001（豁免仅限保留项）', e6.code === 1001, e6);
 
   console.log('=== ossSts.sign 批量 in 查询 ===');
   const s1 = await call(ossStsMain, { action: 'sign', items: [{ key: travelKey }] });

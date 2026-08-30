@@ -205,7 +205,7 @@ async function handleCommitEdit(event, openid) {
   }
   if (!fp) throw new BizError(1004);
 
-  const input = validateSaveInput(event);
+  const input = validateSaveInput(event, new Set(fp.tags || [])); // S7-R5：豁免保留项格式层 3/6（存量标签整体放行）
   // S7-R4：编辑场景存量标签豁免——新增项须命中本人 customTags，保留项（原文档已有）放行
   await validateTagsEdit(input.tags, openid, new Set(fp.tags || []));
 

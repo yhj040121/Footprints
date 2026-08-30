@@ -9,7 +9,8 @@
  * 3. user 文档显式写 _openid + openid：云函数管理端写入不会自动带 _openid，
  *    而前端后续读写本人 user 文档依赖「仅创建者可读写」（按 _openid 判定）。
  * 4. createdAt 由服务端 serverDate 写入，前端传了也忽略。
- * 5. S6-R4：action=updateProfile 头像/昵称更新（user 集合客户端 write:false 后的服务端写入口）。
+ * 5. S6-R4：action=updateProfile 头像/昵称更新（user 集合客户端 write:false 后的服务端写入口）；
+ *    S7-R3：新增 removeCustomTags 删除自定义标签（事务内重读 → 仅移除命中项 → 一次 update 写回）。
  * 6. S7：未知 action（非空且 ≠ updateProfile）直接 1001，不落入普通登录；
  *    updateProfile 的 avatarUrl MIME 收紧为 image/jpeg|png|webp；update 须恰好更新 1 条、
  *    回读失败一律 9000（绝不返回空 profile）。
@@ -154,12 +155,18 @@ exports.main = async (event) => {
 };
 
 /**
- * action = "updateProfile"（S6-R4，契约 §1.1）：头像/昵称更新（FR-14）。
+ * action = "updateProfile"（S6-R4，契约 §1.1）：头像/昵称更新与自定义标签删除（FR-14）。
  * 入参：avatarUrl（base64 dataURL，S7 收紧仅 image/jpeg|png|webp，解码后 ≤64KB，超限 1001）、
- *       nickname（1~32 字，去首尾空白）。
+ *       nickname（1~32 字，去首尾空白）、
+ *       removeCustomTags（S7-R3：1~10 项非空字符串；仅移除本人 user.customTags 中命中的项，
+ *                       未命中项忽略，绝不把入参文本并入列表；允许删除历史 7~10 字旧标签；
+ *                       删除不需审核）。
  * 未传/传 null 的字段不动；openid 取自上下文；出参返回更新后的完整 profile。
- * S7：update 须恰好命中 1 条文档、回读失败 → 9000（绝不返回空 profile）。
- * 错误码：1001（格式/MIME/超限）、9000（DB 异常）。
+ * 执行（S7-R5）：有 removeCustomTags 入参时走数据库事务——事务内重读本人 user.customTags →
+ *       仅移除命中的项 →（若同传头像/昵称一并并入同一 update）→ 一次 update 写回；
+ *       无 removeCustomTags（仅头像/昵称）走普通 update，须恰好命中 1 条文档。
+ * S7：回读失败 → 9000（绝不返回空 profile）。
+ * 错误码：1001（格式/MIME/超限/无字段可更新）、9000（DB 异常）。
  */
 async function handleUpdateProfile(event, openid) {
   const update = {};
@@ -187,9 +194,49 @@ async function handleUpdateProfile(event, openid) {
     update.nickname = nick;
   }
 
-  if (!Object.keys(update).length) return fail(1001, CODE_MSG[1001]); // 无字段可更新
+  // removeCustomTags（S7-R3）：1~10 项、每项非空字符串；只删不加、未命中忽略、
+  // 允许删除历史 7~10 字旧标签（对命中项按完全相等移除，不做长度限制、不并入列表）
+  let removeCustomTags = null;
+  if (event.removeCustomTags !== undefined && event.removeCustomTags !== null) {
+    if (
+      !Array.isArray(event.removeCustomTags) ||
+      event.removeCustomTags.length < 1 ||
+      event.removeCustomTags.length > 10
+    ) {
+      return fail(1001, CODE_MSG[1001]);
+    }
+    if (event.removeCustomTags.some((t) => typeof t !== 'string' || t.length < 1)) {
+      return fail(1001, CODE_MSG[1001]);
+    }
+    removeCustomTags = event.removeCustomTags;
+  }
+
+  // 无字段可更新（头像/昵称/删除标签都未提供）→ 1001
+  if (!Object.keys(update).length && removeCustomTags === null) return fail(1001, CODE_MSG[1001]);
 
   try {
+    if (removeCustomTags !== null) {
+      // S7-R5：事务内重读本人 user.customTags → 仅移除命中的项（未命中忽略，绝不合并入参）
+      // →（同传的头像/昵称并入同一 update）→ 一次 update 写回；user 文档不存在/异常 → 9000
+      await db.runTransaction(async (transaction) => {
+        let u = null;
+        try {
+          const got = await transaction.collection('user').doc(openid).get();
+          u = got && got.data ? got.data : null;
+        } catch (e) {
+          u = null;
+        }
+        if (!u) throw new Error('user doc not found');
+        const current = Array.isArray(u.customTags) ? u.customTags : [];
+        const removeSet = new Set(removeCustomTags);
+        const data = Object.assign({ customTags: current.filter((t) => !removeSet.has(t)) }, update);
+        await transaction.collection('user').doc(openid).update({ data });
+      });
+      // 事务路径已含全部写入（头像/昵称 + 标签），直接回读返回，不再走下方普通 update
+      return await readBackProfile(openid);
+    }
+
+    // 仅头像/昵称：普通 update，须恰好命中 1 条文档
     const updRes = await db.collection('user').doc(openid).update({ data: update });
     // S7：必须恰好更新 1 条文档，否则视为异常（含文档不存在的 updated=0）
     const updated = updRes && updRes.stats && typeof updRes.stats.updated === 'number'
@@ -205,6 +252,11 @@ async function handleUpdateProfile(event, openid) {
   }
 
   // 回读返回完整 profile（S7：回读失败 → 9000，绝不返回空 profile）
+  return await readBackProfile(openid);
+}
+
+/** 回读本人 user 并返回完整 profile（S7：回读失败 → 9000） */
+async function readBackProfile(openid) {
   let got;
   try {
     got = await db.collection('user').doc(openid).get();

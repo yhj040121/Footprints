@@ -2,7 +2,7 @@
  * lib/validate —— 入参校验与日期/标签工具（契约 §1.2 commitSave/commitEdit 共用）
  */
 const { BizError } = require('./errors');
-const { MAX_TEXT_CHARS, UUID_RE, KEY_RE, DATE_RE } = require('./constants');
+const { MAX_TEXT_CHARS, MAX_CUSTOM_TAG_CHARS, UUID_RE, KEY_RE, DATE_RE } = require('./constants');
 
 // db 懒获取：index.js 顶层 cloud.init() 之后（首次调用时）才创建，避免 require 先于 init
 function getDb() {
@@ -25,8 +25,14 @@ function isValidDateString(s) {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 
-/** commitSave/commitEdit 共用入参校验（格式层，1001） */
-function validateSaveInput(event) {
+/**
+ * commitSave/commitEdit 共用入参校验（格式层，1001）。
+ * @param {object} event
+ * @param {string[]|Set<string>} [oldTags] commitEdit 原文档 tags——传入时豁免保留项（编辑场景）：
+ *        仅对「新增/变更」项执行 3/6 上限，原记录保留项（含历史 4~10 个、7~10 字的存量标签）整体放行。
+ *        commitSave 不传 → 全部项按 3/6 校验。
+ */
+function validateSaveInput(event, oldTags) {
   // date：YYYY-MM-DD 且真实日历合法（S6 修正，拒绝如 02-30），不得晚于服务端今天
   const date = event.date;
   if (typeof date !== 'string' || !isValidDateString(date)) throw new BizError(1001);
@@ -56,9 +62,14 @@ function validateSaveInput(event) {
 
   // tags：≤3 个、单个 ≤6 字（S7-R4；预设标签已移除，命中本人 customTags 校验在 validateTags/validateTagsEdit）
   // S6-R3：重复标签去重（写入去重后数组）
+  // S7-R5：commitEdit 编辑场景豁免——传 oldTags 时，保留项（原文档已有，含 4~10 个、7~10 字存量标签）
+  //        整体放行，仅「新增/变更」项执行 3/6；未传（commitSave）则全部项执行 3/6
   const rawTags = event.tags === undefined || event.tags === null ? [] : event.tags;
-  if (!Array.isArray(rawTags) || rawTags.length > 3) throw new BizError(1001);
-  if (rawTags.some((t) => typeof t !== 'string' || t.length < 1 || t.length > 6)) throw new BizError(1001);
+  if (!Array.isArray(rawTags)) throw new BizError(1001);
+  const oldSet = oldTags == null ? null : oldTags instanceof Set ? oldTags : new Set(oldTags);
+  const evalTags = oldSet ? rawTags.filter((t) => !oldSet.has(t)) : rawTags; // 仅新增/变更项（无豁免 = 全部）
+  if (evalTags.length > 3) throw new BizError(1001);
+  if (evalTags.some((t) => typeof t !== 'string' || t.length < 1 || t.length > MAX_CUSTOM_TAG_CHARS)) throw new BizError(1001);
   const tags = [...new Set(rawTags)]; // 去重（顺序保持）
 
   // photos：0~9 项；S6-R2——每项必须恰好为「旧照片项 { key }」或「新增/替换照片项 { photoId }」之一：
@@ -99,15 +110,18 @@ async function validateTags(tags, openid) {
 }
 
 /**
- * commitEdit 的 tags 命中校验（S7-R4，契约 §1.2「编辑场景存量标签豁免」）：
- * 本次提交 tags 与原文档 tags 比较——「新增项」（不在原文档 tags）必须命中本人 user.customTags；
- * 「保留项」（存在于原文档 tags）放行（历史记录可能带预设移除前的旧标签，编辑其他字段不该被卡住）；
- * 不满足 → 1001。数量/字数上限已由 validateSaveInput 统一校验。
+ * commitEdit 的 tags 命中校验（S7-R4 契约 §1.2「编辑场景存量标签豁免」；S7-R5 调整顺序）：
+ * 先用保留项集合把 tags 分成「新增/变更项」（不在原文档 tags）与「保留项」（原文档已有）；
+ * 仅「新增/变更项」须命中本人 user.customTags（格式层 3/6 已由 validateSaveInput(oldTags) 对同一子集执行）；
+ * 「保留项」整体放行（历史记录可能带预设移除前/旧规下的 4~10 个、7~10 字存量标签，
+ * 编辑其他字段不该被卡住）；不满足 → 1001。
  */
 async function validateTagsEdit(tags, openid, oldTags) {
   const old = oldTags instanceof Set ? oldTags : new Set(oldTags || []);
+  const changed = tags.filter((t) => !old.has(t)); // 仅新增/变更项（保留项整体放行）
+  if (!changed.length) return;
   const custom = new Set(await getUserCustomTags(openid));
-  const invalid = tags.filter((t) => !old.has(t) && !custom.has(t));
+  const invalid = changed.filter((t) => !custom.has(t));
   if (invalid.length) throw new BizError(1001);
 }
 
