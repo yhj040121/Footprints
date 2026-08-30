@@ -137,23 +137,21 @@
     </view>
   </view>
 
-  <!-- 保存进度/结果弹层（FR-07：进度可见；失败给重试入口，重试沿用同一 clientSaveId） -->
-  <view wx:if="{{saving || saveError}}" class="mask" catchtouchmove="noop">
+  <!-- 保存反馈：等待期间仅轻微按压压暗页面（无任何文字提示）；失败时弹层给原因与重试/取消
+       本方案处于 press-sync 交互模型：附着力来自「马上出结果」，发布后让唯一操作用户（本机）体验优先 -->
+  <view wx:if="{{saving}}" class="press-mask" catchtouchmove="noop"></view>
+
+  <!-- 保存失败弹层：给出原因；「取消」保留表单内容可继续修改，点击取消不触发自动跳转（文案明示） -->
+  <view wx:elif="{{saveError}}" class="mask" catchtouchmove="noop">
     <view class="panel">
-      <view class="panel-title">{{isEdit ? '保存修改' : '保存足迹'}}</view>
-      <block wx:if="{{saving}}">
-        <view class="panel-text">保存中…</view>
-        <view class="panel-btns">
-          <button class="fp-btn-plain panel-btn" bindtap="onSaveCancel">取消</button>
-        </view>
-      </block>
-      <block wx:else>
-        <view class="panel-text">{{saveError.message}}</view>
-        <view class="panel-btns">
-          <button class="fp-btn-plain panel-btn" bindtap="onSaveCancel">取消</button>
-          <button wx:if="{{saveError.retryable}}" class="fp-btn-primary panel-btn" bindtap="onSaveRetry">重试</button>
-        </view>
-      </block>
+      <view class="panel-title">保存失败</view>
+      <view class="panel-text">{{saveError.message}}</view>
+      <view class="panel-btns">
+        <button class="fp-btn-plain panel-btn" bindtap="onSaveCancel" style="{{saveError.retryable ? '' : 'display:none'}}">关闭</button>
+        <button class="fp-btn-plain panel-btn" bindtap="onSaveCancel">取消（保留内容）</button>
+        <button wx:if="{{saveError.retryable}}" class="fp-btn-primary panel-btn" bindtap="onSaveRetry">重试</button>
+      </view>
+      <view wx:if="{{!saveError.retryable}}" class="fp-hint save-fail-hint">内容已保留在表单中，可直接修改后重新保存</view>
     </view>
   </view>
 </view>

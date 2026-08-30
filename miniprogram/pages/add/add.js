@@ -105,15 +105,15 @@ Page(Object.assign({
   },
 
   onHide() {
-    // 检测/上传中退出本页 → 终止本次保存：停止轮询、不调 commit、无残留（FR-06 验收 4）
-    if (this.data.saving) {
-      this.cancelSave();
-      if (!this.data.isEdit) this._needReset = true;
-    }
+    // 保存退出本页：立即中止在途保存并作废旧轮次（防在隐藏页残留 setData 复活旧链）
+    this.cancelSave();
+    // 检测/上传中退出本页 → 本次保存被终止：新增模式置位，下次 onShow 重置表单（FR-06 验收 4）
+    if (!this.data.isEdit) this._needReset = true;
   },
 
   onUnload() {
-    if (this.data.saving) this.cancelSave();
+    // 保存退出本页：一律中止在途链（tab 页可能不触发 onHide 直接被销毁）
+    this.cancelSave();
   },
 
   // ---------- 表单 ----------
@@ -276,14 +276,16 @@ Page(Object.assign({
   onDeleteCustomTag(e) {
     const tag = e.currentTarget.dataset.tag;
     if (!tag || this.data.saving || this.data.deletingTag || this._customTags.indexOf(tag) < 0) return;
-    wx.showModal({
-      title: '删除标签',
-      content: '确认删除「' + tag + '」？已选中的该标签也会移除。',
-      confirmText: '删除',
-      confirmColor: '#8C3B2E',
-      success: (res) => {
-        if (res.confirm) this.deleteCustomTag(tag);
-      }
+    this.guardSaving().then(() => {
+      wx.showModal({
+        title: '删除标签',
+        content: '确认删除「' + tag + '」？已选中的该标签也会移除。',
+        confirmText: '删除',
+        confirmColor: '#8C3B2E',
+        success: (res) => {
+          if (res.confirm) this.deleteCustomTag(tag);
+        }
+      });
     });
   },
 
@@ -316,7 +318,9 @@ Page(Object.assign({
       wx.showToast({ title: '最多选择 ' + constants.MAX_TAGS + ' 个标签', icon: 'none' });
       return;
     }
-    this.setData({ tagModalVisible: true, tagInput: '', tagError: '' });
+    this.guardSaving().then(() => {
+      this.setData({ tagModalVisible: true, tagInput: '', tagError: '' });
+    });
   },
 
   onTagInput(e) {
@@ -325,6 +329,7 @@ Page(Object.assign({
   },
 
   onTagModalCancel() {
+    if (this.data.tagChecking) return; // 审核在途不可关闭，防止后台回调写入 stale 标签
     this.setData({ tagModalVisible: false, tagInput: '', tagError: '' });
   },
 
@@ -341,7 +346,7 @@ Page(Object.assign({
       this.setData({ tagModalVisible: false, tagInput: '', tagError: '', selectedTags: selected });
       return;
     }
-    if (this.data.tagChecking) return;
+    if (this.data.tagChecking || this.data.saving) return;
     this.setData({ tagChecking: true });
     request.callFunction('secCheck', {
       action: 'text',
@@ -353,16 +358,21 @@ Page(Object.assign({
       this._customTags = custom;
       const selected = this.data.selectedTags.slice();
       if (selected.indexOf(tag) < 0 && selected.length < constants.MAX_TAGS) selected.push(tag);
+      // 回调写入前校验标签弹窗仍开着、未被关闭/取消（在途竞态防 stale 写入；若已关闭则跳过组合变更，
+      // 仅同步标签源，避免把用户改动过的选中态覆盖掉）
+      const merged = this.data.tagModalVisible;
+      this._customTags = merged ? custom : this._customTags;
       this.markDirty();
       this.setData({
         tagChecking: false,
-        tagModalVisible: false,
+        tagModalVisible: merged,
         tagInput: '',
         tagError: '',
-        selectedTags: selected
+        selectedTags: merged ? selected : this.data.selectedTags
       });
       this.buildTagOptions();
     }).catch((err) => {
+      if (!this.data.tagModalVisible) return; // 弹窗已关闭：丢弃静默
       this.setData({
         tagChecking: false,
         tagError: (err && err.code === 2001)

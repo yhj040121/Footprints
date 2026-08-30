@@ -12,11 +12,12 @@ module.exports = {
     const photo = this.data.photos.find((p) => p.uid === uid);
     if (!photo || photo.status !== 'upload-failed') return;
     this.setPhoto(uid, { status: 'uploading', progress: 0 }); // 同步占位，防连点重入
-    this.issueAndUpload([photo])
-      .catch(() => {
-        const current = this.data.photos.find((p) => p.uid === uid);
-        if (current && current.status === 'uploading') this.setPhoto(uid, { status: 'upload-failed' });
-      });
+    this.issueAndUpload([photo]).catch(() => {
+      // 保存（可将其并入重试中的单张）与普通重试并发：竞态弱——photo 状态可能已被保存链改写，
+      // 仅当仍停留在 uploading 才回滚为 upload-failed；若已转为 checking/checked 则保持不动
+      const current = this.data.photos.find((p) => p.uid === uid);
+      if (current && current.status === 'uploading') this.setPhoto(uid, { status: 'upload-failed' });
+    });
     // 补传成功会立即 imageSubmit；下一次「保存/重试」从 checking/uploaded 状态继续轮询或送审
   },
 

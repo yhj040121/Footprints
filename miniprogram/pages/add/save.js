@@ -30,6 +30,10 @@ module.exports = {
     // 保存轮次 token：每轮生成全新 ctx 并取 round；旧轮次的回调按「ctx===this._saveCtx 且未取消」双校验丢弃
     const ctx = { cancelled: false, round: ++this._saveSeq };
     this._saveCtx = ctx;
+    // UX：saving 仅挡并发/禁用，不弹进度层（弹层只在失败时出现）；存一个永久未决 promise
+    // 供 guardSaving 拦截保存期间可能触发的标签弹窗/导航等交互（按钮 disabled 之外的兜底）
+    this.saveGuardPromise = new Promise(() => {});
+    this.saveGuardSlots = [];
     this.setData({ saving: true, saveError: null });
     this.runSave(ctx).catch((err) => this.handleSaveError(err, ctx));
   },
@@ -38,10 +42,14 @@ module.exports = {
     if (this.data.saving) return;
     const ctx = { cancelled: false, round: ++this._saveSeq };
     this._saveCtx = ctx;
+    // UX：同 onSave，存 guard promise 供保存期间拦截标签弹窗/导航
+    this.saveGuardPromise = new Promise(() => {});
+    this.saveGuardSlots = [];
     this.setData({ saving: true, saveError: null });
     this.runSave(ctx).catch((err) => this.handleSaveError(err, ctx));
   },
 
+  // 失败弹层上的「取消（保留内容）」或「关闭」：退回编辑态（不清理表单）
   onSaveCancel() {
     this.cancelSave();
   },
@@ -50,6 +58,10 @@ module.exports = {
     if (this._saveCtx) this._saveCtx.cancelled = true;
     this._saveCtx = null; // 使旧轮次异步回调因 identity 不匹配而全部失效（杜绝被新保存复活）
     this.setData({ saving: false, saveError: null });
+    // 在途保存被中断/取消（含失败的队列）：如存在已排队的旧链，放行拦截器，防页面残留 setData
+    if (this.saveGuardSlots) {
+      while (this.saveGuardSlots.length) this.saveGuardSlots.shift();
+    }
   },
 
   // 双校验：ctx 未取消 且 ctx 仍是当前这一轮（防止旧异步链干扰/复活新保存）
@@ -59,6 +71,13 @@ module.exports = {
       e.cancelled = true;
       throw e;
     }
+  },
+
+  // 防呆：标签弹窗/标签删除等交互在保存中已被按钮 disabled 挡住，
+  // 此处兜底拦截（含编辑模式导航离开等路径），保证在途链不被残留 setData 复活
+  guardSaving() {
+    if (!this.data.saving) return Promise.resolve();
+    return this.saveGuardPromise;
   },
 
   // S6-R2 隔离区转正时序（契约 §4.1）：text 预检 → issueUpload（审核前签发隔离区表单）→
@@ -82,13 +101,15 @@ module.exports = {
     }
 
     // 3) 图片审核（已传隔离区才送审：imageSubmit 真并行，批量 imagePoll；
-    //    单张 40s 自该张提交起算、阶段 50s 自首张提交起算，§6 定值）
+    //    阶段 50s 自首张提交起算，§6 定值）
     const toCheck = this.data.photos.filter((p) =>
       !p.isOld && (p.status === 'uploaded' || p.status === 'checking')
     );
     if (toCheck.length) {
-      const stageStartAt = await this.submitReviews(toCheck, ctx);
-      await this.pollReviews(toCheck, ctx, stageStartAt);
+      const n = this.submitReviews(toCheck, ctx);
+      const r = await this.startPollReviews(toCheck, ctx); // 阶段起点 = 首张提交发起时间
+      await n; // 全部送审请求落定（失败由 submitReviews 抛出）
+      await r.promise;
     }
 
     // 4) 提交写库（幂等；服务端 CopyObject 转正 travel/ 后落库）
@@ -204,12 +225,15 @@ module.exports = {
     return true;
   },
 
+  // 保存成功：轻提示后自动回时间线（新增）或重开详情页（编辑并刷新其 onLoad）；表单已重置
   onSaveSuccess(ctx) {
     this.throwIfCancelled(ctx);
     const wasEdit = this.data.isEdit;
     const editId = this.data.editId;
     this._clientSaveId = null;
     this._reviewSubmitAt = {};
+    this.saveGuardPromise = null;
+    this.saveGuardSlots = null;
     this.setData({ saving: false, saveError: null });
     wx.showToast({ title: '保存成功', icon: 'success' });
     this.resetForm();
@@ -227,6 +251,8 @@ module.exports = {
   // §5.4：编辑结果未确认（重发仍无应答/回读不一致）→ 不断言失败，回详情页按回读数据展示实际状态
   onSaveUnconfirmed() {
     this._clientSaveId = null;
+    this.saveGuardPromise = null;
+    this.saveGuardSlots = null;
     this.setData({ saving: false, saveError: null });
     wx.showToast({ title: '结果未确认，请到详情查看', icon: 'none' });
     wx.setNavigationBarTitle({ title: '溪山行旅' });
@@ -237,10 +263,12 @@ module.exports = {
     }
   },
 
+  // 传输异常终态：重发仍无应答 → onSaveUnconfirmed；快差异常 1001 等由 handleSaveError 分流
   handleSaveError(err, ctx) {
-    if (err && err.cancelled) return; // 用户主动取消/退出：静默
+    if (err && err.cancelled) return; // 取消/退出：静默
     if (ctx && ctx !== this._saveCtx) return; // 旧轮次的回调：直接丢弃，杜绝复活新保存
-    this.setData({ saving: false });
+    // 保存失败：解锁并终止在途链（clear 拦截器，防页面残留 setData 复活），表单内容保留待改
+    this.cancelSave();
     if (request.isFieldError(err)) {
       // 2001：定位字段；2002：定位到具体照片（状态已在轮询时标注）
       if (err.code === 2001) this.locateTextField(err);
