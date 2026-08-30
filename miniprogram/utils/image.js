@@ -10,7 +10,55 @@ function extOf(filePath) {
   return m ? m[1].toLowerCase() : '';
 }
 
-// FR-05：相册多选或拍照；单张 ≤30MB（S8-R2 放宽，存原图），格式 jpg/png/webp/heic
+function statSize(filePath) {
+  return new Promise((resolve) => {
+    wx.getFileSystemManager().getFileInfo({
+      filePath,
+      success: (res) => resolve(res.size || 0),
+      fail: () => resolve(0)
+    });
+  });
+}
+
+function compressOnce(src, options) {
+  return new Promise((resolve, reject) => {
+    wx.compressImage(Object.assign({ src }, options, {
+      success: (res) => resolve(res.tempFilePath),
+      fail: reject
+    }));
+  });
+}
+
+// 超 30MB 大图（ProRAW/高像素直出/长截图）自动压到限内再收（S8-R2，用户无感知）：
+// 先只压质量不动尺寸（85→70），仍超再逐步缩边长（0.6/0.4/0.25，quality 80）；
+// 压缩失败或压不到位返回 null，由调用方静默跳过
+async function shrinkToLimit(filePath) {
+  let srcW = 0;
+  try {
+    const info = await getImageInfo(filePath);
+    srcW = Math.max(1, info.width || 1);
+  } catch (e) { /* 读不出尺寸时只走压质量步 */ }
+  const steps = [{ quality: 85 }, { quality: 70 }];
+  if (srcW) {
+    [0.6, 0.4, 0.25].forEach((r) => {
+      steps.push({ quality: 80, compressedWidth: Math.max(1, Math.round(srcW * r)) });
+    });
+  }
+  for (let i = 0; i < steps.length; i++) {
+    let out = '';
+    try {
+      out = await compressOnce(filePath, steps[i]);
+    } catch (e) { continue; } // 该步不支持（如部分平台 png 压质量）：试下一步
+    const size = await statSize(out);
+    if (size > 0 && size <= constants.MAX_PHOTO_BYTES) {
+      return { tempFilePath: out, size };
+    }
+  }
+  return null;
+}
+
+// FR-05：相册多选或拍照；单张 ≤30MB（S8-R2 放宽，存原图），格式 jpg/png/webp/heic；
+// 超 30MB 自动压缩到限内再收（用户无感知），压不到或格式不符则静默跳过
 // 返回 { items: [{ photoId, tempFilePath, size, ext }], rejectedCount }
 // 契约 §4.2：每次选图/换图/删后重选都生成新 photoId
 function chooseImages(maxCount) {
@@ -19,19 +67,30 @@ function chooseImages(maxCount) {
       count: maxCount,
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
-      success: (res) => {
+      success: async (res) => {
         const items = [];
         let rejectedCount = 0;
-        (res.tempFiles || []).forEach((f) => {
+        for (const f of (res.tempFiles || [])) {
           const ext = extOf(f.tempFilePath);
           const okExt = constants.PHOTO_EXTS.indexOf(ext) >= 0;
-          const okSize = f.size > 0 && f.size <= constants.MAX_PHOTO_BYTES;
-          if (okExt && okSize) {
+          if (okExt && f.size > 0 && f.size <= constants.MAX_PHOTO_BYTES) {
             items.push({ photoId: uuid(), tempFilePath: f.tempFilePath, size: f.size, ext });
+            continue;
+          }
+          if (!okExt) { rejectedCount++; continue; } // 格式不符：静默跳过
+          const shrunk = await shrinkToLimit(f.tempFilePath);
+          if (shrunk) {
+            // 压缩产物可能是转码后的 jpg（如 heic/png 入参），ext 以产物为准
+            items.push({
+              photoId: uuid(),
+              tempFilePath: shrunk.tempFilePath,
+              size: shrunk.size,
+              ext: extOf(shrunk.tempFilePath) || ext
+            });
           } else {
             rejectedCount++;
           }
-        });
+        }
         resolve({ items, rejectedCount });
       },
       fail: (err) => {
