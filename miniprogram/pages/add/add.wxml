@@ -60,9 +60,9 @@
     </view>
     <view class="field-row field-row--loc">
       <view class="loc-status">
-        <text wx:if="{{hasCoord}}" class="fp-hint">已获取坐标，保存后上地图</text>
+        <text wx:if="{{placeError}}" class="field-error">{{placeError}}</text>
         <text wx:elif="{{placeHint}}" class="field-hint">{{placeHint}}</text>
-        <text wx:elif="{{placeError}}" class="field-error">{{placeError}}</text>
+        <text wx:elif="{{hasCoord}}" class="fp-hint">已获取坐标，保存后上地图</text>
       </view>
       <button class="fp-btn-plain loc-btn" bindtap="onGetLocation" disabled="{{saving}}">获取当前位置</button>
     </view>
@@ -97,7 +97,15 @@
       class="fp-chip tag {{selectedTags.indexOf(item) >= 0 ? 'fp-chip--active' : (selectedTags.length >= maxTags ? 'tag--full' : '')}}"
       data-tag="{{item}}"
       bindtap="onTagToggle"
-    >{{item}}</view>
+    >
+      <text>{{item}}</text>
+      <view
+        wx:if="{{customTags.indexOf(item) >= 0 && !saving}}"
+        class="tag-delete"
+        data-tag="{{item}}"
+        catchtap="onDeleteCustomTag"
+      >×</view>
+    </view>
     <view class="fp-chip tag tag-custom" bindtap="onShowTagModal">＋自定义</view>
   </view>
 
@@ -134,7 +142,7 @@
     <view class="panel">
       <view class="panel-title">{{isEdit ? '保存修改' : '保存足迹'}}</view>
       <block wx:if="{{saving}}">
-        <view class="panel-text">{{saveText}}</view>
+        <view class="panel-text">保存中…</view>
         <view class="panel-btns">
           <button class="fp-btn-plain panel-btn" bindtap="onSaveCancel">取消</button>
         </view>
