@@ -1,20 +1,22 @@
-<!-- 自定义 tabBar：5 槽（时间线/日历/中央凸出「＋」/地图/我的）
-     图标素材待用户提供，暂用文字 + 线性小符占位（见交付说明） -->
+<!-- 自定义 tabBar：水墨悬浮胶囊条（按 pic 成果图样式）
+     背景/图标为 pic/ SVG 预渲染 PNG（assets/tabbar/，转换脚本 tools/svg2png/convert.js） -->
 <view class="tab-bar">
-  <view
-    wx:for="{{list}}"
-    wx:key="pagePath"
-    class="tab-item {{index === selected && !item.isCenter ? 'tab-item--active' : ''}}"
-    data-index="{{index}}"
-    bindtap="onTap"
-  >
-    <view wx:if="{{item.isCenter}}" class="tab-center">
-      <view class="tab-center-btn">＋</view>
-      <text class="tab-text tab-text--center">{{item.text}}</text>
+  <image class="tab-bar__bg" src="/assets/tabbar/nav-bg.png" mode="scaleToFill" />
+  <view class="tab-bar__row">
+    <view
+      wx:for="{{list}}"
+      wx:key="pagePath"
+      class="tab-item {{index === selected && !item.isCenter ? 'tab-item--active' : ''}}"
+      data-index="{{index}}"
+      bindtap="onTap"
+    >
+      <view wx:if="{{item.isCenter}}" class="tab-center">
+        <image class="tab-center__btn" src="/assets/tabbar/add.png" mode="aspectFit" />
+      </view>
+      <block wx:else>
+        <image class="tab-item__icon" src="{{item.icon}}" mode="aspectFit" />
+        <text class="tab-item__text">{{item.text}}</text>
+      </block>
     </view>
-    <block wx:else>
-      <image class="tab-icon-img" src="{{index === selected ? item.iconActive : item.icon}}" mode="aspectFit" />
-      <text class="tab-text">{{item.text}}</text>
-    </block>
   </view>
 </view>

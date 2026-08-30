@@ -37,11 +37,11 @@
   white-space: nowrap;
 }
 
-/* 「定位我」圆形按钮：右下角，浮于卡片之上；tabBar 高 110rpx，故底部再让出 */
+/* 「定位我」圆形按钮：右下角，浮于卡片之上；tabBar 高 164rpx，故底部再让出 */
 .locate-btn {
   position: absolute;
   right: var(--space-4);
-  bottom: calc(150rpx + env(safe-area-inset-bottom));
+  bottom: calc(200rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -60,7 +60,7 @@
 .locate-btn--hover { background: var(--color-bg-hover); }
 /* 卡片展开时上移，避免与卡片重叠 */
 .locate-btn--up {
-  bottom: calc(390rpx + env(safe-area-inset-bottom));
+  bottom: calc(440rpx + env(safe-area-inset-bottom));
 }
 
 .locate-icon {
@@ -88,7 +88,7 @@
   position: absolute;
   left: var(--space-4);
   right: var(--space-4);
-  bottom: calc(150rpx + env(safe-area-inset-bottom));
+  bottom: calc(200rpx + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   padding: var(--space-3);

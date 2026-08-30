@@ -3,7 +3,7 @@
 .page {
   min-height: 100vh;
   /* 底部留白避开固定 tabBar（100rpx + 安全区 + 中央凸钮） */
-  padding: var(--space-4) var(--space-4) calc(200rpx + env(safe-area-inset-bottom));
+  padding: var(--space-4) var(--space-4) calc(240rpx + env(safe-area-inset-bottom));
 }
 
 /* ---------- 状态页（空态 / 网络失败） ---------- */

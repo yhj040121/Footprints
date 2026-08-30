@@ -2,7 +2,7 @@
 
 .page {
   /* 底部留白避开固定 tabBar */
-  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
 }
 
 /* 顶部：年月 + 左右切换 */

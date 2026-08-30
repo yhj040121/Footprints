@@ -1,74 +1,79 @@
-/* 5 槽自定义 tabBar：中央凸出大按钮
-   安全区只在容器上垫一次（真机 bug 修复：原 item 内重复垫安全区，
-   110rpx 定高被安全区吃掉后内容只剩 ~42rpx，图标文字被裁切） */
+/* 水墨悬浮胶囊 tabBar（成果图样式）：
+   左右留边离屏，nav-bg.png 为正胶囊（两端半圆）+宣纸纹理；
+   中央「＋」墨圆整体坐在栏内（不凸出栏顶），圆心与两侧图标区对齐、略偏上；
+   安全区只垫在容器 bottom 上一次（真机 bug 修复记录见 git history） */
 .tab-bar {
   position: fixed;
+  left: 20rpx;
+  right: 20rpx;
+  bottom: calc(14rpx + env(safe-area-inset-bottom));
+  height: 164rpx;
+  z-index: 100;
+}
+
+.tab-bar__bg {
+  position: absolute;
+  top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
+  width: 100%;
+  height: 100%;
+  /* drop-shadow 跟随 PNG 胶囊的实际轮廓，不用 box-shadow（方框会露边） */
+  filter: drop-shadow(0 6rpx 16rpx rgba(53, 50, 44, 0.16));
+}
+
+.tab-bar__row {
+  position: relative;
   display: flex;
   align-items: stretch;
-  padding-bottom: env(safe-area-inset-bottom);
-  background: #FDFBF5;
-  border-top: 1rpx solid #E2DACA;
-  z-index: 100;
+  height: 100%;
 }
 
 .tab-item {
   flex: 1;
-  min-width: 0; /* 强制五槽等分可收缩：任何子项的 min-content 撑宽都会把最后的「我的」推出屏幕（真机 bug） */
-  height: 100rpx;
+  min-width: 0; /* 五槽等分可收缩：子项 min-content 撑宽会把「我的」推出屏幕（真机 bug） */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6rpx;
-  color: #9A937F;
+  padding-top: 6rpx; /* 图标区整体略偏上，与中央墨圆圆心平齐（成果图比例） */
 }
 
-.tab-item--active {
-  color: #35322C;
-  font-weight: 500;
+.tab-item__icon {
+  width: 88rpx;
+  height: 88rpx;
+  opacity: 0.42;
+  transition: opacity 0.2s ease;
 }
 
-.tab-icon-img {
-  width: 44rpx;
-  height: 44rpx;
+.tab-item--active .tab-item__icon {
+  opacity: 1;
 }
 
-.tab-text {
-  font-size: 22rpx;
+.tab-item__text {
+  font-size: 24rpx;
   line-height: 1.2;
+  color: #8A8371;
 }
 
-/* 中央凸出「＋」：按钮浮出栏顶，文字落栏内 */
+.tab-item--active .tab-item__text {
+  color: #35322C;
+  font-weight: 600;
+}
+
+/* 中央水墨「＋」墨圆：直径约为栏高 63%，整体在栏内，无文字标签（成果图） */
 .tab-center {
   position: relative;
-  align-self: stretch; /* 撑满槽位宽：不用 width:100%（百分比子项会撑爆 flex 最小宽度） */
-  height: 100rpx;
+  width: 100%;
+  height: 100%;
 }
 
-.tab-center-btn {
+.tab-center__btn {
   position: absolute;
-  top: -36rpx;
+  top: calc(50% - 18rpx);
   left: 50%;
-  transform: translateX(-50%);
-  width: 92rpx;
-  height: 92rpx;
-  border-radius: 50%;
-  background: #35322C;
-  color: #F8F4EA;
-  font-size: 50rpx;
-  line-height: 84rpx;
-  text-align: center;
-  border: 4rpx solid #FDFBF5;
-}
-
-.tab-text--center {
-  position: absolute;
-  bottom: 6rpx;
-  left: 0;
-  right: 0;
-  text-align: center;
-  color: #9A937F;
+  transform: translate(-50%, -50%);
+  width: 104rpx;
+  height: 104rpx;
+  filter: drop-shadow(0 6rpx 12rpx rgba(53, 50, 44, 0.28));
 }

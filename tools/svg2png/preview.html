@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!-- custom-tab-bar 视觉预览：rpx/2=px（375px 视口 = 750rpx），样式与 index.wxss 逐条对应 -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; background: #F6F2E9; font-family: -apple-system, sans-serif; }
+  .stage { position: relative; width: 375px; height: 240px; overflow: hidden; }
+  /* content 区域示意 */
+  .fake-content { position: absolute; top: 10px; left: 16px; right: 16px; height: 80px;
+    border-radius: 8px; background: #EFEADF; opacity: .6; }
+
+  .tab-bar {
+    position: absolute; /* 页面里等价 fixed */
+    left: 10px; right: 10px;
+    bottom: 7px; /* 14rpx */
+    height: 82px; /* 164rpx */
+    z-index: 100;
+  }
+  .tab-bar__bg {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    filter: drop-shadow(0 3px 8px rgba(53,50,44,.16));
+  }
+  .tab-bar__row { position: relative; display: flex; align-items: stretch; height: 100%; }
+  .tab-item {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px; padding-top: 3px;
+  }
+  .tab-item__icon { width: 44px; height: 44px; opacity: .42; transition: opacity .2s; }
+  .tab-item--active .tab-item__icon { opacity: 1; }
+  .tab-item__text { font-size: 12px; line-height: 1.2; color: #8A8371; }
+  .tab-item--active .tab-item__text { color: #35322C; font-weight: 600; }
+  .tab-center { position: relative; width: 100%; height: 100%; }
+  .tab-center__btn {
+    position: absolute; top: calc(50% - 9px); left: 50%; transform: translate(-50%, -50%);
+    width: 52px; height: 52px;
+    filter: drop-shadow(0 3px 6px rgba(53,50,44,.28));
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="fake-content"></div>
+  <div class="tab-bar">
+    <img class="tab-bar__bg" src="/miniprogram/assets/tabbar/nav-bg.png">
+    <div class="tab-bar__row">
+      <div class="tab-item tab-item--active">
+        <img class="tab-item__icon" src="/miniprogram/assets/tabbar/timeline.png"><span class="tab-item__text">时间轴</span>
+      </div>
+      <div class="tab-item">
+        <img class="tab-item__icon" src="/miniprogram/assets/tabbar/calendar.png"><span class="tab-item__text">日历</span>
+      </div>
+      <div class="tab-item">
+        <div class="tab-center"><img class="tab-center__btn" src="/miniprogram/assets/tabbar/add.png"></div>
+      </div>
+      <div class="tab-item">
+        <img class="tab-item__icon" src="/miniprogram/assets/tabbar/map.png"><span class="tab-item__text">地图</span>
+      </div>
+      <div class="tab-item">
+        <img class="tab-item__icon" src="/miniprogram/assets/tabbar/mine.png"><span class="tab-item__text">我的</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

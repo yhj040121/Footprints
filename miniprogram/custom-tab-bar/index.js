@@ -1,12 +1,13 @@
 Component({
   data: {
     selected: 0,
+    // 图标为 pic/ SVG 预渲染 PNG（active 态由样式 opacity 区分，不需要双份图）
     list: [
-      { pagePath: '/pages/timeline/timeline', text: '时间线', icon: '/assets/icons/timeline.png', iconActive: '/assets/icons/timeline-active.png' },
-      { pagePath: '/pages/calendar/calendar', text: '日历', icon: '/assets/icons/calendar.png', iconActive: '/assets/icons/calendar-active.png' },
-      { pagePath: '/pages/add/add', text: '记录', icon: '', iconActive: '', isCenter: true },
-      { pagePath: '/pages/map/map', text: '地图', icon: '/assets/icons/map.png', iconActive: '/assets/icons/map-active.png' },
-      { pagePath: '/pages/mine/mine', text: '我的', icon: '/assets/icons/mine.png', iconActive: '/assets/icons/mine-active.png' }
+      { pagePath: '/pages/timeline/timeline', text: '时间轴', icon: '/assets/tabbar/timeline.png' },
+      { pagePath: '/pages/calendar/calendar', text: '日历', icon: '/assets/tabbar/calendar.png' },
+      { pagePath: '/pages/add/add', text: '记录', icon: '', isCenter: true },
+      { pagePath: '/pages/map/map', text: '地图', icon: '/assets/tabbar/map.png' },
+      { pagePath: '/pages/mine/mine', text: '我的', icon: '/assets/tabbar/mine.png' }
     ]
   },
 
