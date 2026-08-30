@@ -30,7 +30,7 @@ module.exports = {
     // 保存轮次 token：每轮生成全新 ctx 并取 round；旧轮次的回调按「ctx===this._saveCtx 且未取消」双校验丢弃
     const ctx = { cancelled: false, round: ++this._saveSeq };
     this._saveCtx = ctx;
-    this.setData({ saving: true, saveError: null, saveText: '准备中…' });
+    this.setData({ saving: true, saveError: null });
     this.runSave(ctx).catch((err) => this.handleSaveError(err, ctx));
   },
 
@@ -38,7 +38,7 @@ module.exports = {
     if (this.data.saving) return;
     const ctx = { cancelled: false, round: ++this._saveSeq };
     this._saveCtx = ctx;
-    this.setData({ saving: true, saveError: null, saveText: '准备中…' });
+    this.setData({ saving: true, saveError: null });
     this.runSave(ctx).catch((err) => this.handleSaveError(err, ctx));
   },
 
@@ -62,7 +62,7 @@ module.exports = {
   },
 
   // S6-R2 隔离区转正时序（契约 §4.1）：text 预检 → issueUpload（审核前签发隔离区表单）→
-  // wx.uploadFile 原图直传隔离区（进度 n/9）→ imageSubmit(photoId)（对隔离区对象本体送审，不再压缩/传 base64）
+  // 每张 wx.uploadFile 成功即 imageSubmit(photoId)（百分比仅显示在照片格内，对隔离区对象本体送审）
   // → imagePoll → commitSave（photos 只带 photoId，不传 key，travel key 由服务端从绑定对象解析）
   async runSave(ctx) {
     // 1) 文本预检（FR-06：服务端 commit 会终审，不信任前端结果；S7-R4 过程无状态文案）
@@ -77,7 +77,7 @@ module.exports = {
       !p.isOld && (p.status === 'ready' || p.status === 'upload-failed')
     );
     if (toUpload.length) {
-      await this.issueAndUpload(toUpload);
+      await this.issueAndUpload(toUpload, ctx);
       this.throwIfCancelled(ctx);
     }
 
@@ -87,7 +87,6 @@ module.exports = {
       !p.isOld && (p.status === 'uploaded' || p.status === 'checking')
     );
     if (toCheck.length) {
-      // S7-R4：图片审核过程无感知——不切换「检测中」文案，保持上传 n/n 的单一指示直至提交
       const stageStartAt = await this.submitReviews(toCheck, ctx);
       await this.pollReviews(toCheck, ctx, stageStartAt);
     }
@@ -112,7 +111,6 @@ module.exports = {
   },
 
   doCommit(ctx) {
-    this.setData({ saveText: '提交中…' });
     // S6-R2：新照片只传 { photoId }（travel key 由服务端从 sec-check/key 绑定对象解析，前端不传 key）；
     // 编辑场景旧照片项传 { key }（契约 §1.2 commitSave/commitEdit）
     const photos = this.data.photos.map((p) =>
@@ -211,6 +209,7 @@ module.exports = {
     const wasEdit = this.data.isEdit;
     const editId = this.data.editId;
     this._clientSaveId = null;
+    this._reviewSubmitAt = {};
     this.setData({ saving: false, saveError: null });
     wx.showToast({ title: '保存成功', icon: 'success' });
     this.resetForm();
@@ -277,6 +276,7 @@ module.exports = {
     // 2005：三元组对不上 → 整链重走。已过审的 photoId 被服务端冻结（task=pass 拒绝再签发，§4.2），
     // 必须为全部新照片换新 photoId 从签发开始重来；clientSaveId 作废
     this._clientSaveId = null;
+    this._reviewSubmitAt = {};
     const photos = this.data.photos.map((p) =>
       p.isOld ? p : Object.assign({}, p, { photoId: uuidUtil.uuid(), status: 'ready', progress: 0 })
     );

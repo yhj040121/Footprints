@@ -97,16 +97,6 @@
   color: var(--color-text-primary);
 }
 
-/* 缩略图上放日期数字：浅色小底衬保证可读（无阴影） */
-.cell-day--on-thumb {
-  min-width: 40rpx;
-  padding: 0 10rpx;
-  text-align: center;
-  border-radius: var(--radius-full);
-  background: var(--color-bg-surface);
-  border: 1rpx solid var(--color-border-subtle);
-}
-
 .cell-inner--muted .cell-day {
   color: var(--color-text-disabled);
 }

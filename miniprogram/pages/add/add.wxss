@@ -193,6 +193,23 @@
   gap: var(--space-2);
   margin: var(--space-4) 0;
 }
+.tag {
+  position: relative;
+}
+.tag-delete {
+  position: absolute;
+  top: -14rpx;
+  right: -14rpx;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: var(--radius-full);
+  background: #8C3B2E;
+  color: #F8F4EA;
+  font-size: 28rpx;
+  line-height: 34rpx;
+  text-align: center;
+  z-index: 2;
+}
 .tag-custom {
   border-style: dashed;
 }

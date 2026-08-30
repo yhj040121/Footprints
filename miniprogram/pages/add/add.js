@@ -34,6 +34,7 @@ Page(Object.assign({
     noteHint: '',          // 同上（备注失焦预审）
     maxNoteLen: constants.MAX_NOTE_LEN,
     allTags: [],           // 可选标签 = 本人 customTags ∪ 已选旧标签（编辑存量，S7-R4 预设已移除）
+    customTags: [],        // 服务端返回的自定义标签；仅这些标签展示删除入口
     selectedTags: [],
     maxTags: constants.MAX_TAGS,
     maxTagLen: constants.MAX_TAG_LEN,
@@ -45,10 +46,10 @@ Page(Object.assign({
     tagInput: '',
     tagError: '',          // 弹窗内轻提示（S7-R4：审核失败不再 toast 打断）
     tagChecking: false,
+    deletingTag: '',
 
     // 保存进度弹层
     saving: false,
-    saveText: '',
     saveError: null        // { message, retryable }
   },
 
@@ -70,6 +71,7 @@ Page(Object.assign({
     this._noteCheckSeq = 0;
     this._placeChecked = '';    // 上次预审通过的内容（未变化不重审）
     this._noteChecked = '';
+    this._reviewSubmitAt = {}; // photoId → imageSubmit 发起时间（逐张上传即送审）
 
     const today = dateUtil.today();
     this.setData({ today, date: today, dateText: dateUtil.displayDate(today) });
@@ -131,6 +133,7 @@ Page(Object.assign({
 
   onPlaceInput(e) {
     const place = e.detail.value;
+    this._placeCheckSeq += 1; // 输入即使在途预审失效，防旧响应覆盖新值
     this.markDirty();
     const patch = { place, placeError: '', placeHint: '' };
     // FR-04：选点回填后手动改写地点文字 → 视为手动输入，清空经纬度
@@ -156,12 +159,12 @@ Page(Object.assign({
       action: 'text',
       texts: [{ field: 'place', content: place }]
     }).then(() => {
-      if (seq !== this._placeCheckSeq) return;
+      if (seq !== this._placeCheckSeq || (this.data.place || '').trim() !== place) return;
       this._placeChecked = place;
       this.setData({ placeHint: '' });
     }).catch((err) => {
       // 仅预审明确「未通过」（2001）才轻提示；接口异常等保持无感知（保存时服务端会拦截并给出原因）
-      if (seq !== this._placeCheckSeq) return;
+      if (seq !== this._placeCheckSeq || (this.data.place || '').trim() !== place) return;
       if (err && err.code === 2001) {
         this.setData({ placeHint: '该地点可能未通过安全检测，保存时可能被拦截' });
       }
@@ -177,7 +180,8 @@ Page(Object.assign({
         this._lat = res.latitude;
         this._lng = res.longitude;
         this._locatedPlace = place;
-        this.setData({ place, placeError: '', hasCoord: true });
+        this._placeCheckSeq += 1;
+        this.setData({ place, placeError: '', placeHint: '', hasCoord: true });
       },
       fail: (err) => {
         const msg = (err && err.errMsg) || '';
@@ -199,6 +203,7 @@ Page(Object.assign({
   },
 
   onNoteInput(e) {
+    this._noteCheckSeq += 1; // 输入即使在途预审失效，防旧响应覆盖新值
     this.markDirty();
     this.setData({ note: e.detail.value, noteLen: e.detail.value.length, noteError: '', noteHint: '' });
   },
@@ -215,11 +220,11 @@ Page(Object.assign({
       action: 'text',
       texts: [{ field: 'note', content: note }]
     }).then(() => {
-      if (seq !== this._noteCheckSeq) return;
+      if (seq !== this._noteCheckSeq || this.data.note !== note) return;
       this._noteChecked = note;
       this.setData({ noteHint: '' });
     }).catch((err) => {
-      if (seq !== this._noteCheckSeq) return;
+      if (seq !== this._noteCheckSeq || this.data.note !== note) return;
       if (err && err.code === 2001) {
         this.setData({ noteHint: '该备注可能未通过安全检测，保存时可能被拦截' });
       }
@@ -246,7 +251,7 @@ Page(Object.assign({
         options.push(t);
       }
     });
-    this.setData({ allTags: options });
+    this.setData({ allTags: options, customTags: this._customTags.slice() });
   },
 
   onTagToggle(e) {
@@ -264,6 +269,46 @@ Page(Object.assign({
     }
     this.markDirty();
     this.setData({ selectedTags: selected });
+  },
+
+  // 全部现行标签均为自定义标签：角标进入删除，二次确认后由 login.updateProfile 服务端删除。
+  // 编辑记录里仅为兼容而回填的旧标签不在 customTags 中，因此不会展示删除入口。
+  onDeleteCustomTag(e) {
+    const tag = e.currentTarget.dataset.tag;
+    if (!tag || this.data.saving || this.data.deletingTag || this._customTags.indexOf(tag) < 0) return;
+    wx.showModal({
+      title: '删除标签',
+      content: '确认删除「' + tag + '」？已选中的该标签也会移除。',
+      confirmText: '删除',
+      confirmColor: '#8C3B2E',
+      success: (res) => {
+        if (res.confirm) this.deleteCustomTag(tag);
+      }
+    });
+  },
+
+  deleteCustomTag(tag) {
+    this.setData({ deletingTag: tag });
+    request.callFunction('login', {
+      action: 'updateProfile',
+      removeCustomTags: [tag]
+    }).then((data) => {
+      const profile = (data && data.profile) || {};
+      const customTags = Array.isArray(profile.customTags) ? profile.customTags.slice() : [];
+      const previousCustomTags = this._customTags.slice();
+      const selectedTags = this.data.selectedTags.filter((t) =>
+        previousCustomTags.indexOf(t) < 0 || customTags.indexOf(t) >= 0
+      );
+      const app = getApp();
+      if (app) app.globalData.profile = Object.assign({}, app.globalData.profile || {}, profile);
+      this._customTags = customTags;
+      if (selectedTags.length !== this.data.selectedTags.length) this.markDirty();
+      this.setData({ deletingTag: '', selectedTags });
+      this.buildTagOptions();
+    }).catch((err) => {
+      this.setData({ deletingTag: '' });
+      wx.showToast({ title: (err && err.message) || '标签删除失败，请重试', icon: 'none' });
+    });
   },
 
   onShowTagModal() {
@@ -365,6 +410,7 @@ Page(Object.assign({
     const target = this.data.photos.find((p) => p.uid === uid);
     if (!target) return;
     if (target.isOld && target.key) this._removedKeys.push(target.key); // commitEdit removedKeys
+    if (target.photoId) delete this._reviewSubmitAt[target.photoId];
     this.markDirty();
     this.setData({ photos: this.data.photos.filter((p) => p.uid !== uid) });
   },
@@ -382,6 +428,11 @@ Page(Object.assign({
   // ---------- 编辑模式（FR-13） ----------
 
   enterEdit(id) {
+    this._placeCheckSeq += 1;
+    this._noteCheckSeq += 1;
+    this._placeChecked = '';
+    this._noteChecked = '';
+    this._reviewSubmitAt = {};
     wx.showLoading({ title: '加载中', mask: true });
     db.getFootprint(id).then((fp) => {
       wx.hideLoading();
@@ -465,6 +516,9 @@ Page(Object.assign({
     this._removedKeys = [];
     this._clientSaveId = null;
     this._formDirty = false;
+    this._placeCheckSeq += 1;
+    this._noteCheckSeq += 1;
+    this._reviewSubmitAt = {};
     this.setData({
       isEdit: false,
       editId: '',
