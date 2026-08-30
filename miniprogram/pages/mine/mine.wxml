@@ -39,10 +39,56 @@
       <text class="menu-arrow">›</text>
     </view>
     <view class="menu-line"></view>
+    <view class="menu-item" hover-class="menu-item--hover" bindtap="onManageTagsTap">
+      <text class="menu-icon">#</text>
+      <text class="menu-text">管理标签</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-line"></view>
     <view class="menu-item" hover-class="menu-item--hover" bindtap="onSettingsTap">
       <text class="menu-icon">⚙</text>
       <text class="menu-text">设置</text>
       <text class="menu-arrow">›</text>
+    </view>
+  </view>
+
+  <!-- 管理标签弹层（FR-03 自定义标签：增/删/去重；列表含服务端 customTags ∪ 历史存量标签） -->
+  <view wx:if="{{tagPanelVisible}}" class="mask" bindtap="onTagPanelClose">
+    <view class="panel fp-card" catchtap="noop">
+      <view class="panel-title">管理标签</view>
+      <view class="tag-add-row">
+        <input
+          class="tag-add-input"
+          value="{{tagInput}}"
+          maxlength="{{maxTagLen}}"
+          placeholder="输入新标签，最多 {{maxTagLen}} 字"
+          placeholder-class="ph"
+          confirm-type="done"
+          bindinput="onTagInput"
+          bindconfirm="onTagConfirm"
+        />
+        <button
+          class="fp-btn-primary tag-add-btn"
+          size="mini"
+          bindtap="onTagConfirm"
+          disabled="{{tagChecking}}"
+        >添加</button>
+      </view>
+      <view wx:if="{{tagError}}" class="tag-error">{{tagError}}</view>
+      <scroll-view scroll-y class="tag-list">
+        <view wx:for="{{allTags}}" wx:key="*this" class="tag-row">
+          <text class="tag-row-text">{{item}}</text>
+          <text
+            wx:if="{{customTags.indexOf(item) >= 0}}"
+            class="tag-row-del"
+            catchtap="onTagRowDelete"
+            data-tag="{{item}}"
+          >× 删除</text>
+          <text wx:else class="tag-row-legacy">历史标签</text>
+        </view>
+        <view wx:if="{{!allTags.length}}" class="tag-list-empty">暂无标签</view>
+      </scroll-view>
+      <button class="fp-btn-plain" bindtap="onTagPanelClose">关闭</button>
     </view>
   </view>
 

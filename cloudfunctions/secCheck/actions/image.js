@@ -61,11 +61,12 @@ async function handleImageSubmit(event, openid) {
   }
 
   // 3. 同步审核优先（S7-R2 降级，契约预留）：消息推送回投通道在本环境不可用，
-  //    改为服务端拉取隔离区对象的缩放版本（w_750→480→320，≤1MB）走同步 imgSecCheck。
-  //    业务拒绝 → 落 reject 任务并立即返回终态；接口异常/下载失败 → 回退下方异步 mediaCheckAsync 路径。
+  //    改为服务端拉取隔离区对象的缩放版本（w_320 优先，>1MB 再降档重试一次，≤1MB）走同步 imgSecCheck。
+  //    业务拒绝 → 落 reject 任务并立即返回终态；下载失败/缩放仍>1MB → 按 error 返回（前端提示更换图片，
+  //    不再回退异步 mediaCheckAsync——该通道回投不可用，pending 任务会成为死等的根源）
   try {
     let buffer = null;
-    for (const w of [750, 480, 320]) {
+    for (const w of [320, 480]) {
       const u = client.signatureUrl(imgKey, { expires: 600, process: 'image/resize,w_' + w });
       const b = await fetchBuffer(u);
       buffer = b;
@@ -78,7 +79,9 @@ async function handleImageSubmit(event, openid) {
       console.log('[secCheck.imageSubmit] sync audit done:', photoId, status);
       return ok({ checkId: photoId, status });
     }
-    console.error('[secCheck.imageSubmit] resized buffer still >1MB, fallback to async');
+    console.error('[secCheck.imageSubmit] resized buffer still >1MB, mark error');
+    await writeTaskRow(client, photoId, openid, 'error', null, 'SYNC_FAIL: resize still >1MB');
+    return ok({ checkId: photoId, status: 'error', err: 'SYNC_FAIL: resize still >1MB' });
   } catch (e) {
     // S7-R2 调试：同步失败直接返回错误（不再回退异步），失败原因写入任务便于 imagePoll 读取
     const why = (e && (e.errMsg || e.message)) || String(e);
@@ -86,48 +89,6 @@ async function handleImageSubmit(event, openid) {
     await writeTaskRow(client, photoId, openid, 'error', null, 'SYNC_FAIL: ' + why);
     return ok({ checkId: photoId, status: 'error', err: 'SYNC_FAIL: ' + why });
   }
-
-  // 3a. 10 分钟签名 URL 供 mediaCheckAsync 拉取（受审对象 = 原图本体；异步兜底路径）
-  let url;
-  try {
-    url = client.signatureUrl(imgKey, { expires: 600 });
-  } catch (e) {
-    console.error('[secCheck.imageSubmit] sign url failed:', e);
-    throw new BizError(3001);
-  }
-
-  // 4. mediaCheckAsync 云调用（media_type=2 图片，version=2，scene=2）
-  //    S6 修正：非零 errCode 的异常返回（未抛异常）同样 → 2004（暂缓入库，不误判为业务不通过）
-  //    S6-R2：返回字段兼容 traceId 与 trace_id
-  let traceId;
-  try {
-    const res = await cloud.openapi.security.mediaCheckAsync({
-      media_url: url,
-      media_type: 2,
-      version: 2,
-      scene: 2,
-      openid,
-    });
-    const tid = res && (res.traceId || res.trace_id);
-    if (!res || res.errCode !== 0 || !tid) {
-      console.error('[secCheck.imageSubmit] invalid mediaCheckAsync response:', JSON.stringify(res));
-      throw new Error('invalid mediaCheckAsync response');
-    }
-    traceId = tid;
-  } catch (e) {
-    console.error('[secCheck.imageSubmit] mediaCheckAsync error:', e);
-    throw new BizError(2004); // 接口异常 → 2004
-  }
-
-  // 5. 落审核记录（任务对象，含 openid/status/traceId/时间戳）+ traceId 反向映射（回投定位用）
-  try {
-    await writeTaskRow(client, photoId, openid, 'pending', traceId);
-  } catch (e) {
-    console.error('[secCheck.imageSubmit] write task failed:', e);
-    throw new BizError(3001);
-  }
-
-  return ok({ checkId: photoId, status: 'pending' });
 }
 
 /** action = "imagePoll"：批量读审核记录状态（pending/pass/reject/error） */

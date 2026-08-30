@@ -14,6 +14,14 @@ Page({
     nickname: '', // input 绑定值；未设置时 placeholder 显示「旅人」
     stats: { days: 0, footprints: 0, photos: 0 },
     todayStr: '',
+    // 管理标签（FR-03 自定义标签：增/删）
+    tagPanelVisible: false,
+    tagInput: '',
+    tagError: '',
+    tagChecking: false,
+    customTags: [],
+    allTags: [],
+    maxTagLen: constants.MAX_TAG_LEN,
     // date range panel (FR-15 按日期范围)
     showRangePanel: false,
     rangeStart: '',
@@ -48,6 +56,115 @@ Page({
       db.stats()
         .then((s) => this.setData({ stats: s }))
         .catch(() => wx.showToast({ title: '统计加载失败，请稍后重试', icon: 'none' }));
+    });
+  },
+
+  // ---------- 标签管理（FR-03 自定义标签：增/删，删除需显式确认） ----------
+
+  // 打开管理标签弹层：以「服务端 customTags ∪ 历史存量标签」为完整列表；
+  // 服务端列表成为删除判定，历史遗留（不在 customTags）标「历史标签」不可删
+  onManageTagsTap() {
+    this.loadTagData().then(() => {
+      this.setData({ tagPanelVisible: true, tagInput: '', tagError: '' });
+    });
+  },
+
+  loadTagData() {
+    return db.getProfile().then((p) => {
+      const customTags = ((p && p.customTags) || []).slice();
+      this.setData({ customTags });
+      // 统一并集：仅保留首次出现的顺序
+      const seen = {};
+      const all = [];
+      customTags.concat(this.data.allTags).forEach((t) => {
+        if (t && !seen[t]) { seen[t] = true; all.push(t); }
+      });
+      // 剔除不在 customTags 的历史遗留（它们仍会在记录上保留展示，但不在「可管理」列表里）
+      this.setData({ allTags: all.filter((t) => customTags.indexOf(t) >= 0) });
+    }).catch(() => {});
+  },
+
+  onTagPanelClose() {
+    if (this.data.tagChecking) return; // 审核在途不可关闭，防后台回调写 stale 列表
+    this.setData({ tagPanelVisible: false, tagInput: '', tagError: '' });
+  },
+
+  onTagInput(e) {
+    this.setData({ tagInput: (e.detail.value || '').slice(0, constants.MAX_TAG_LEN), tagError: '' });
+  },
+
+  // 新增：secCheck.text(field=customTag) 审核通过后服务端原子追加，返回完整 customTags；
+  // 成功同步 app.globalData.profile（与 add 页、login 删除路径同一口径）
+  onTagConfirm() {
+    const tag = (this.data.tagInput || '').trim();
+    if (!tag) { this.onTagPanelClose(); return; }
+    if (this.data.customTags.indexOf(tag) >= 0) {
+      this.setData({ tagInput: '', tagError: '该标签已存在' });
+      return;
+    }
+    if (this.data.tagChecking) return;
+    this.setData({ tagChecking: true, tagError: '' });
+    request.callFunction('secCheck', {
+      action: 'text',
+      texts: [{ field: 'customTag', content: tag }]
+    }).then((data) => {
+      const custom = ((data && data.customTags) || this.data.customTags.slice()).slice();
+      if (custom.indexOf(tag) < 0) custom.push(tag);
+      const app = getApp();
+      if (app && app.globalData) app.globalData.profile = Object.assign({}, app.globalData.profile || {}, { customTags: custom.slice() });
+      this.setData({
+        tagChecking: false,
+        customTags: custom,
+        allTags: custom.slice(),
+        tagInput: '',
+        tagError: ''
+      });
+    }).catch((err) => {
+      this.setData({
+        tagChecking: false,
+        tagError: (err && err.code === 2001)
+          ? '该标签未通过安全检测，请换一个'
+          : ((err && err.message) || '标签暂不可用，请稍后再试')
+      });
+    });
+  },
+
+  // 删除：login.updateProfile(removeCustomTags=[tag]) 服务端删除，未命中项忽略；成功后回读刷新
+  onTagRowDelete(e) {
+    const tag = e.currentTarget.dataset.tag;
+    if (!tag || this.data.tagChecking) return;
+    wx.showModal({
+      title: '删除标签',
+      content: '确认删除「' + tag + '」？已选中的该标签也会移除。',
+      confirmText: '删除',
+      confirmColor: '#8C3B2E',
+      success: (res) => {
+        if (res.confirm) this.deleteTag(tag);
+      }
+    });
+  },
+
+  deleteTag(tag) {
+    this.setData({ tagChecking: true });
+    request.callFunction('login', {
+      action: 'updateProfile',
+      removeCustomTags: [tag]
+    }).then((data) => {
+      const profile = (data && data.profile) || {};
+      const customTags = Array.isArray(profile.customTags) ? profile.customTags.slice() : [];
+      const app = getApp();
+      if (app) app.globalData.profile = Object.assign({}, app.globalData.profile || {}, profile);
+      this.setData({
+        tagChecking: false,
+        customTags,
+        allTags: customTags.slice(),
+        tagInput: '',
+        tagError: ''
+      });
+      wx.showToast({ title: '已删除', icon: 'success' });
+    }).catch((err) => {
+      this.setData({ tagChecking: false });
+      wx.showToast({ title: (err && err.message) || '标签删除失败，请重试', icon: 'none' });
     });
   },
 

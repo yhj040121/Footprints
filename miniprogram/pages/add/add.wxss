@@ -227,12 +227,6 @@
 }
 
 /* ---------- 弹层 ---------- */
-.press-mask {
-  position: fixed;
-  inset: 0;
-  background: var(--color-overlay);
-  z-index: 100;
-}
 .mask {
   position: fixed;
   inset: 0;

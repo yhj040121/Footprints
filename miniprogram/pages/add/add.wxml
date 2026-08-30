@@ -137,12 +137,8 @@
     </view>
   </view>
 
-  <!-- 保存反馈：等待期间仅轻微按压压暗页面（无任何文字提示）；失败时弹层给原因与重试/取消
-       本方案处于 press-sync 交互模型：附着力来自「马上出结果」，发布后让唯一操作用户（本机）体验优先 -->
-  <view wx:if="{{saving}}" class="press-mask" catchtouchmove="noop"></view>
-
-  <!-- 保存失败弹层：给出原因；「取消」保留表单内容可继续修改，点击取消不触发自动跳转（文案明示） -->
-  <view wx:elif="{{saveError}}" class="mask" catchtouchmove="noop">
+  <!-- 保存反馈：等待期间无任何蒙层/文案（不做视觉拦截，保存按钮与表单已禁用）；失败时弹层给原因 -->
+  <view wx:if="{{saveError}}" class="mask" catchtouchmove="noop">
     <view class="panel">
       <view class="panel-title">保存失败</view>
       <view class="panel-text">{{saveError.message}}</view>
