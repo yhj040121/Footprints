@@ -262,9 +262,7 @@ Page(Object.assign({
         this.markDirty();
         this.setData({ photos: this.data.photos.concat(added) });
       }
-      if (res.rejectedCount > 0) {
-        wx.showToast({ title: res.rejectedCount + ' 张大小/格式不支持，已跳过', icon: 'none' });
-      }
+      // 超限/不支持格式静默跳过（S8-R2 用户拍板：无感知，不提示）
     }).catch(() => {
       wx.showToast({ title: '选图失败，请重试', icon: 'none' });
     });

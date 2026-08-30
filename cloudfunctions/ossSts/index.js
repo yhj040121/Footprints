@@ -8,7 +8,7 @@
  *      未过审/未送审重试 → 复用同隔离 key 重签（覆盖重传同一 key，不产生第二份）
  *   3. AssumeRole：session policy 精确收敛到**隔离 key**、仅 oss:PutObject、900 秒
  *      —— travel/ 的任何写凭证永不下发前端（转正只由 secCheck 服务端 CopyObject 完成）
- *   4. 逐隔离 key 生成 PostObject 表单签名（conditions：$key 精确匹配 + content-length-range 1~10MB）
+ *   4. 逐隔离 key 生成 PostObject 表单签名（conditions：$key 精确匹配 + content-length-range 1~30MB）
  *   5. 落绑定对象 sec-check/key/<photoId>.json（photoId↔imgKey↔travelKey↔openid）
  *
  * action = "sign"
@@ -55,7 +55,7 @@ const PROCESS_WHITELIST = { 'image/resize,w_300': true, 'image/resize,w_1600': t
 const STS_DURATION = 900; // STS/上传凭证有效期（秒，AssumeRole 最小值）
 const POST_POLICY_MS = 15 * 60 * 1000; // PostObject policy 有效期 15 分钟（契约 §1.3）
 const SIGN_EXPIRES = 3600; // 签名 URL 有效期（秒，定值 §6）
-const MAX_OBJ_SIZE = 10485760; // 10MB（FR-05 单张上限）
+const MAX_OBJ_SIZE = 31457280; // 30MB（FR-05 单张上限，S8-R2 由 10MB 放宽）
 const DB_PAGE = 100; // sign 批量归属核验分页大小
 // S6-R2：真 UUID v4（版本位 4、variant 8/9/a/b）
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

@@ -10,7 +10,7 @@ function extOf(filePath) {
   return m ? m[1].toLowerCase() : '';
 }
 
-// FR-05：相册多选或拍照；单张 ≤10MB，格式 jpg/png/webp/heic
+// FR-05：相册多选或拍照；单张 ≤30MB（S8-R2 放宽，存原图），格式 jpg/png/webp/heic
 // 返回 { items: [{ photoId, tempFilePath, size, ext }], rejectedCount }
 // 契约 §4.2：每次选图/换图/删后重选都生成新 photoId
 function chooseImages(maxCount) {

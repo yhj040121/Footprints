@@ -8,7 +8,7 @@ module.exports = {
 
   // 照片（FR-05）
   MAX_PHOTOS: 9,
-  MAX_PHOTO_BYTES: 10 * 1024 * 1024,   // 单张 ≤10MB
+  MAX_PHOTO_BYTES: 30 * 1024 * 1024,   // 单张 ≤30MB（S8-R2 用户拍板：存原图，2026-08-30 由 10MB 放宽）
   PHOTO_EXTS: ['jpg', 'jpeg', 'png', 'webp', 'heic'],
 
   // 头像（契约 §2.1 S6 修正：压缩后 base64 dataURL ≤64KB 写 user.avatarUrl）

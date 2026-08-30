@@ -29,7 +29,6 @@
       <view class="photo-add-text">添加照片</view>
     </view>
   </view>
-  <view class="fp-hint photo-hint">照片将在保存时上传并检测，单张 ≤10MB</view>
 
   <!-- 日期（FR-03：只选年月日，默认今天，不可选未来） -->
   <view class="fp-card field-card">
