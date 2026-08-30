@@ -16,7 +16,7 @@
   <view class="grid">
     <view wx:for="{{cells}}" wx:key="date" class="cell">
       <view
-        class="cell-inner {{item.inMonth ? '' : 'cell-inner--muted'}} {{item.isToday ? 'cell-inner--today' : ''}} {{item.isSelected ? 'cell-inner--selected' : ''}}"
+        class="cell-inner {{item.inMonth ? '' : 'cell-inner--muted'}} {{item.isToday ? 'cell-inner--today' : ''}} {{item.isSelected ? 'cell-inner--selected' : ''}} {{item.hasRecord && !item.thumb ? 'cell-inner--has-record' : ''}}"
         data-date="{{item.date}}"
         data-inmonth="{{item.inMonth}}"
         bindtap="onTapCell"
@@ -28,9 +28,6 @@
       </view>
     </view>
   </view>
-
-  <!-- 图例 -->
-  <view class="legend fp-hint">● 有行旅记录</view>
 
   <!-- 当日记录列表 -->
   <block wx:if="{{dayTitle}}">

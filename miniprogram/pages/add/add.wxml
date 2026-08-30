@@ -94,17 +94,5 @@
     {{isEdit ? '保存修改' : '保存'}}
   </button>
 
-  <!-- 保存反馈：等待期间无任何蒙层/文案（不做视觉拦截，保存按钮与表单已禁用）；失败时弹层给原因 -->
-  <view wx:if="{{saveError}}" class="mask" catchtouchmove="noop">
-    <view class="panel">
-      <view class="panel-title">保存失败</view>
-      <view class="panel-text">{{saveError.message}}</view>
-      <view class="panel-btns">
-        <button class="fp-btn-plain panel-btn" bindtap="onSaveCancel" style="{{saveError.retryable ? '' : 'display:none'}}">关闭</button>
-        <button class="fp-btn-plain panel-btn" bindtap="onSaveCancel">取消（保留内容）</button>
-        <button wx:if="{{saveError.retryable}}" class="fp-btn-primary panel-btn" bindtap="onSaveRetry">重试</button>
-      </view>
-      <view wx:if="{{!saveError.retryable}}" class="fp-hint save-fail-hint">内容已保留在表单中，可直接修改后重新保存</view>
-    </view>
-  </view>
+  <!-- 乐观保存（S8）：点保存立即成功并跳页，失败不弹层，原因落在对应记录的徽标上 -->
 </view>

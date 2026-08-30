@@ -83,6 +83,14 @@ Page(Object.assign({
       return;
     }
 
+    // 失败编辑恢复交接：时间线/详情点「修改未保存」徽标 → 恢复编辑表单重试（乐观编辑链）
+    const restoreEditId = app.globalData.restoreEditDraftId;
+    if (restoreEditId) {
+      app.globalData.restoreEditDraftId = null;
+      this.restoreEdit(restoreEditId);
+      return;
+    }
+
     // 编辑交接：detail 页 switchTab 过来（tab 页无法 navigateTo，见文件头注释）
     const editId = app.globalData.editFootprintId;
     if (editId) {
@@ -397,6 +405,75 @@ Page(Object.assign({
       saveError: null
     });
     wx.setNavigationBarTitle({ title: '记录足迹' });
+  },
+
+  // 恢复失败的编辑（乐观编辑链）：时间线/详情点「修改未保存」徽标 → 回填编辑表单重试。
+  // 照片沿用 photoId/状态可断点续跑；恢复即接管草稿（删旧，重存时新建）
+  restoreEdit(id) {
+    const d = drafts.get(id);
+    if (!d || !d.editId) {
+      wx.showToast({ title: '没有待处理的修改', icon: 'none' });
+      return;
+    }
+    drafts.remove(id); // 接管该编辑草稿（下次保存按新草稿落盘；避免「恢复-保存」后旧草稿残留）
+    const origin = d.origin || {};
+    this._origin = {
+      _id: d.editId,
+      place: origin.place,
+      note: origin.note || '',
+      tags: origin.tags || []
+    };
+    this._removedKeys = d.removedKeys || [];
+    this._clientSaveId = d.clientSaveId || null; // 沿用幂等 id（成功半途时可回读原结果）
+    this._formDirty = true; // 用户改动后再保存会换新 clientSaveId
+    this._lat = typeof d.lat === 'number' ? d.lat : null;
+    this._lng = typeof d.lng === 'number' ? d.lng : null;
+    this._locatedPlace = this._lat !== null ? d.place : null;
+    this._placeCheckSeq += 1;
+    this._noteCheckSeq += 1;
+    this._placeChecked = '';
+    this._noteChecked = '';
+    const photos = (d.photos || []).map((p) => (p.isOld ? {
+      uid: ++this._seq,
+      photoId: '',
+      tempFilePath: '',
+      ext: '',
+      key: p.key,
+      url: '',
+      status: 'done',
+      progress: 100,
+      isOld: true
+    } : {
+      uid: ++this._seq,
+      photoId: p.photoId,
+      tempFilePath: p.tempFilePath,
+      ext: p.ext,
+      key: '',
+      url: p.tempFilePath,
+      status: (p.status === 'checking' || p.status === 'uploaded' || p.status === 'upload-failed')
+        ? p.status
+        : 'ready',
+      progress: p.progress || 0,
+      isOld: false
+    }));
+    this.setData({
+      isEdit: true,
+      editId: d.editId,
+      date: d.date,
+      dateText: dateUtil.displayDate(d.date),
+      place: d.place,
+      placeError: '',
+      placeHint: '',
+      hasCoord: this._lat !== null,
+      note: d.note || '',
+      noteLen: (d.note || '').length,
+      noteError: '',
+      noteHint: '',
+      photos,
+      saveError: null
+    });
+    wx.setNavigationBarTitle({ title: '编辑足迹' });
+    this.signEditThumbs(photos);
   },
 
   // 编辑回填照片：运行时按需签名（§1.3，process 白名单缩略图）

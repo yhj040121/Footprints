@@ -51,16 +51,23 @@
 }
 
 .place-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
   margin-top: var(--space-2);
   color: var(--color-text-secondary);
   font-size: var(--text-base);
 }
 
-.place-icon {
-  font-size: var(--text-sm);
+/* 乐观编辑链失败徽标（S8）：与 footprint-card 草稿徽标同风格 */
+.edit-failed-badge {
+  display: inline-block;
+  margin-top: var(--space-2);
+  padding: 6rpx 20rpx;
+  font-size: 22rpx;
+  line-height: 1.4;
+  word-break: break-all;
+  color: #8C3B2E;
+  background: #F4E3DC;
+  border: 1rpx solid #CBB8A8;
+  border-radius: 999rpx;
 }
 
 .tags {

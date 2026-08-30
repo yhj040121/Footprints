@@ -51,10 +51,6 @@
   color: #35322C;
 }
 
-.place-icon {
-  font-size: 26rpx;
-}
-
 .place-text {
   overflow: hidden;
   white-space: nowrap;

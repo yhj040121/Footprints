@@ -70,7 +70,7 @@ Page({
     const cloudCount = d.list.filter((it) => !it.isDraft).length;
     db.listFootprintsPage(cloudCount, constants.PAGE_SIZE)
       .then((res) => {
-        const added = this.decorateList(res.list);
+        const added = this.attachEditDrafts(this.decorateList(res.list));
         // 追加云端页：草稿仅在首屏 mergeDrafts 合并，追加页不重新混排（避免草稿重复/排序抖动）
         const base = d.list.filter((it) => !it.isDraft);
         const list = applyGrouping(base.concat(added));
@@ -95,7 +95,7 @@ Page({
         return db.listFootprintsPage(0, constants.PAGE_SIZE, options);
       })
       .then((res) => {
-        const list = this.mergeDrafts(this.decorateList(res.list));
+        const list = this.mergeDrafts(this.attachEditDrafts(this.decorateList(res.list)));
         this._loadedOnce = true;
         this.setData({ list, hasMore: res.hasMore, loading: false, expandedId: '' });
         this.measureCard();
@@ -162,10 +162,11 @@ Page({
   },
 
   // 把本人草稿（syncing/failed）并入首屏列表，统一按 date desc, createdAt desc 排序（与云端口径一致）
+  // 编辑草稿（带 editId）不单独成卡：失败状态由 attachEditDrafts 挂到对应记录上
   mergeDrafts(list) {
     this.sweepStaleDrafts();
     const draftsList = drafts.listAll()
-      .filter((d) => d.status === 'syncing' || d.status === 'failed')
+      .filter((d) => !d.editId && (d.status === 'syncing' || d.status === 'failed'))
       .map((d) => this.decorateDraft(d));
     if (!draftsList.length) return list;
     const seen = {};
@@ -177,6 +178,25 @@ Page({
     });
     // 排序后重新归组（草稿与记录混排，日期归属需重建）
     return applyGrouping(merged);
+  },
+
+  // 编辑草稿（乐观编辑链）状态挂到对应记录上：syncing 无表现；failed 由卡片徽标提示，
+  // 点击卡片恢复编辑表单重试。编辑中的记录仍按云端（旧）内容展示
+  attachEditDrafts(list) {
+    this.sweepStaleDrafts();
+    const edits = drafts.listAll().filter((d) => d.editId);
+    if (!edits.length) return list;
+    const byFootprintId = {};
+    edits.forEach((d) => { byFootprintId[d.editId] = d; });
+    return list.map((it) => {
+      const d = byFootprintId[it._id];
+      if (!d) return it;
+      return Object.assign({}, it, {
+        editDraftId: d.id,
+        draftStatus: d.status || 'syncing',
+        draftError: d.error || ''
+      });
+    });
   },
 
   // 后台链路中断（杀进程/切后台挂起）：把超过阈值的 syncing 草稿标记为 failed，供用户点击处理
@@ -262,6 +282,12 @@ Page({
     const item = this.data.list.find((it) => it._id === id);
     if (e.detail.isDraft || (item && item.isDraft) || drafts.get(id)) {
       getApp().globalData.restoreDraftId = id;
+      wx.switchTab({ url: '/pages/add/add' });
+      return;
+    }
+    // 编辑失败的记录：恢复编辑表单重试（乐观编辑链的失败落点，卡片带失败徽标）
+    if (item && item.editDraftId && item.draftStatus === 'failed') {
+      getApp().globalData.restoreEditDraftId = item.editDraftId;
       wx.switchTab({ url: '/pages/add/add' });
       return;
     }

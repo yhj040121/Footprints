@@ -1,8 +1,8 @@
 // 提交段（契约 §4.1 保存时序、§5.1 clientSaveId 幂等、§0.3 错误码分流、FR-13 编辑保存、§5.4 传输异常终态）
-// S8 乐观保存：新增走「草稿链」--点保存立即落本地草稿 + toast + 跳时间线，审核/上传/入库在后台推进；
-// 编辑走「同步链」（runSave，页面等待弹层）--详情页数据一致性依赖提交完成，不适合乐观化。
+// S8 乐观保存：新增走「草稿链」、编辑走「编辑链」——点保存立即 toast + 跳页，审核/上传/入库在后台推进。
+// 编辑链失败不弹层：失败原因落在本条记录上（时间线/详情徽标，点击恢复表单重试）。
 // 两条链共享 review.js/upload.js（均按传入照片数组工作，快照对象与页面 data 对象均兼容；
-// setPhoto 按 uid 找不到页面照片时 no-op，草稿链因此天然不影响已重置的表单）。
+// setPhoto 按 uid 找不到页面照片时 no-op，草稿/编辑链因此天然不影响已重置的表单）。
 // 本模块方法经 Object.assign 挂到 add 页 Page 上，this 即页面实例
 const request = require('../../utils/request');
 const uuidUtil = require('../../utils/uuid');
@@ -20,6 +20,18 @@ function refreshTimeline() {
       }
     });
   } catch (e) { /* 栈不可用时由 timeline onShow 兜底刷新 */ }
+}
+
+/** 后台编辑链落定后刷新详情页（若其在页面栈中且正是本条记录） */
+function refreshDetail(footprintId) {
+  try {
+    const pages = getCurrentPages() || [];
+    pages.forEach((p) => {
+      if (p && p.route === 'pages/detail/detail' && p.fpId === footprintId && typeof p.loadDetail === 'function') {
+        p.loadDetail({ force: true });
+      }
+    });
+  } catch (e) { /* 详情页不在栈中即无需刷新 */ }
 }
 
 module.exports = {
@@ -49,28 +61,61 @@ module.exports = {
     return this.startDraftSave();
   },
 
-  // ---------- 编辑：同步等待链（原保存链，弹层等待 + 失败弹层重试） ----------
+  // ---------- 编辑：乐观链（与草稿链同构，失败落在记录上） ----------
 
+  // 立即：快照 + 编辑草稿落盘 + toast + 表单重置 + 回详情页；后台：runEditSave 推进全链
   startEditSave() {
-    const ctx = { cancelled: false, round: ++this._saveSeq, isEdit: true };
-    this._saveCtx = ctx;
-    this.setData({ saving: true, saveError: null });
-    this.runSave(ctx).catch((err) => this.handleSaveError(err, ctx));
+    if (!this._clientSaveId || this._formDirty) {
+      this._clientSaveId = uuidUtil.uuid();
+      this._formDirty = false;
+    }
+    const editId = this.data.editId;
+    const clientSaveId = this._clientSaveId;
+    const snap = this.buildEditSnapshot();
+    // 同一记录只保留最新一份编辑草稿：新编辑接管后旧后台链静默终止
+    this._editChains = this._editChains || {};
+    const prev = this._editChains[editId];
+    if (prev) prev.cancelled = true;
+    drafts.listAll().filter((d) => d.editId === editId).forEach((d) => drafts.remove(d.id));
+
+    const draftId = 'edit_' + Date.now() + '_' + ((Math.random() * 1e6) | 0);
+    drafts.upsert(Object.assign({
+      id: draftId,
+      editId,
+      clientSaveId,
+      status: 'syncing',
+      createdAt: Date.now()
+    }, snap));
+
+    // 立即反馈：用户马上看到「已保存」并回到详情页（编辑在后台推进，失败标注在记录上）
+    wx.showToast({ title: '已保存', icon: 'success' });
+    this.resetForm();
+    wx.setNavigationBarTitle({ title: '溪山行旅' });
+    setTimeout(() => wx.navigateTo({ url: '/pages/detail/detail?id=' + editId }), 600);
+
+    const ctx = {
+      cancelled: false,
+      round: ++this._saveSeq,
+      draftId,
+      editId,
+      clientSaveId,
+      date: snap.date,
+      photoIds: snap.photos.filter((p) => !p.isOld).map((p) => p.photoId)
+    };
+    this._editChains[editId] = ctx;
+    this.runEditSave(ctx, snap).then(
+      () => this.finishEdit(ctx),
+      (err) => this.failEdit(ctx, snap, err)
+    );
   },
 
-  onSaveRetry() {
-    if (this.data.saving) return;
-    if (this.data.isEdit) return this.startEditSave();
-    return this.startDraftSave(); // 草稿链失败后表单保留：再点保存按草稿链重试（同 clientSaveId 幂等）
-  },
-
-  // 失败弹层上的「取消/关闭」：终止在途编辑链并退回表单（内容保留）
+  // 失败弹层上的「取消/关闭」：终止在途编辑链并退回表单（内容保留）。乐观化后 saving 恒为
+  // false，此入口仅作 add 页 onHide/onUnload 兜底保留
   onSaveCancel() {
     this.cancelSave();
   },
 
   cancelSave() {
-    // 只取消编辑链（草稿链在用户离开后仍需后台推进，不受影响）
     if (this._saveCtx && this._saveCtx.isEdit) this._saveCtx.cancelled = true;
     this._saveCtx = null;
     this.setData({ saving: false, saveError: null });
@@ -152,7 +197,7 @@ module.exports = {
     };
   },
 
-  // 草稿链主体：文本预检 -> 上传隔离区 -> 送审/轮询 -> commitSave；与 runSave 同序但全程持快照
+  // 草稿链主体：文本预检 -> 上传隔离区 -> 送审/轮询 -> commitSave；与编辑链同序但全程持快照
   async runDraftSave(ctx, snap) {
     const texts = [];
     if (snap.place) texts.push({ field: 'place', content: snap.place });
@@ -221,21 +266,58 @@ module.exports = {
     refreshTimeline();
   },
 
-  // ---------- 编辑链（同步等待，基于页面 data；语义与 S7 版一致） ----------
+  // ---------- 编辑链（乐观后台，全程持快照；语义与同步版一致） ----------
 
-  // S6-R2 隔离区转正时序（契约 §4.1）：text 预检 -> issueUpload（审核前签发隔离区表单）->
-  // 每张 wx.uploadFile 成功即 imageSubmit(photoId)（百分比仅显示在照片格内，对隔离区对象本体送审）
-  // -> imagePoll -> commitSave（photos 只带 photoId，不传 key，travel key 由服务端从绑定对象解析）
-  async runSave(ctx) {
-    // 1) 文本预检（FR-06：服务端 commit 会终审，不信任前端结果；S7-R4 过程无状态文案）
-    const texts = this.textsToCheck();
+  // 保存瞬间的表单快照（编辑链全程只用快照）：旧照片只留 key，新照片带 tempFilePath/状态可断点续跑；
+  // origin 记原始文本（重试恢复后仍按「仅被修改的文本」预检，FR-13）
+  buildEditSnapshot() {
+    return {
+      date: this.data.date,
+      place: (this.data.place || '').trim(),
+      lat: typeof this._lat === 'number' ? this._lat : null,
+      lng: typeof this._lng === 'number' ? this._lng : null,
+      note: this.data.note || '',
+      // 标签体系下架（S8）：编辑保留原记录标签（原样回传，服务端豁免存量）
+      tags: (this._origin && this._origin.tags) || [],
+      origin: this._origin ? {
+        place: this._origin.place,
+        note: this._origin.note || '',
+        tags: (this._origin.tags || []).slice()
+      } : null,
+      removedKeys: this._removedKeys.slice(),
+      photos: this.data.photos.map((p) => (p.isOld ? {
+        uid: p.uid,
+        key: p.key,
+        status: 'done',
+        progress: 100,
+        isOld: true
+      } : {
+        uid: p.uid,
+        photoId: p.photoId,
+        tempFilePath: p.tempFilePath,
+        ext: p.ext,
+        status: p.status,
+        progress: p.progress,
+        isOld: false
+      }))
+    };
+  },
+
+  // 编辑链主体：文本预检 -> 上传隔离区 -> 送审/轮询 -> commitEdit（+回读确认）；
+  // 与草稿链同序，但提交走 commitEdit（带 footprintId/removedKeys，旧照片传 key）
+  async runEditSave(ctx, snap) {
+    // 1) 文本预检：仅被修改的文本（FR-13：预设标签/日期不重审）；服务端 commit 会终审
+    const origin = snap.origin || {};
+    const texts = [];
+    if (snap.place && snap.place !== origin.place) texts.push({ field: 'place', content: snap.place });
+    if (snap.note && snap.note !== (origin.note || '')) texts.push({ field: 'note', content: snap.note });
     if (texts.length) {
       await request.callFunction('secCheck', { action: 'text', texts });
       this.throwIfCancelled(ctx);
     }
 
-    // 2) 签发隔离区上传凭证 + 原图直传隔离区（审核之前；单张失败标 upload-failed 可单独重试）
-    const toUpload = this.data.photos.filter((p) =>
+    // 2) 签发隔离区上传凭证 + 原图直传（单张失败标 upload-failed，重试恢复后续跑）
+    const toUpload = snap.photos.filter((p) =>
       !p.isOld && (p.status === 'ready' || p.status === 'upload-failed')
     );
     if (toUpload.length) {
@@ -243,87 +325,57 @@ module.exports = {
       this.throwIfCancelled(ctx);
     }
 
-    // 3) 图片审核（已传隔离区才送审：imageSubmit 真并行，批量 imagePoll；
-    //    阶段 50s 自首张提交起算，§6 定值）
-    const toCheck = this.data.photos.filter((p) =>
+    // 3) 图片审核（已传隔离区才送审；阶段 50s 自首张提交起算，§6 定值）
+    const toCheck = snap.photos.filter((p) =>
       !p.isOld && (p.status === 'uploaded' || p.status === 'checking')
     );
     if (toCheck.length) {
       const n = this.submitReviews(toCheck, ctx);
-      const r = await this.startPollReviews(toCheck, ctx); // 阶段起点 = 首张提交发起时间
-      await n; // 全部送审请求落定（失败由 submitReviews 抛出）
+      const r = await this.startPollReviews(toCheck, ctx);
+      await n;
       await r.promise;
     }
 
-    // 4) 提交写库（幂等；服务端 CopyObject 转正 travel/ 后落库）
-    await this.doCommit(ctx);
-  },
-
-  // add：note/place 全量预检；edit：仅被修改的文本（FR-13：预设标签/日期不重审）
-  textsToCheck() {
-    const texts = [];
-    const place = (this.data.place || '').trim();
-    const note = this.data.note || '';
-    if (!this.data.isEdit || !this._origin) {
-      if (place) texts.push({ field: 'place', content: place });
-      if (note) texts.push({ field: 'note', content: note });
-      return texts;
-    }
-    if (place !== this._origin.place) texts.push({ field: 'place', content: place });
-    if (note !== (this._origin.note || '')) texts.push({ field: 'note', content: note });
-    return texts;
-  },
-
-  doCommit(ctx) {
-    // S6-R2：新照片只传 { photoId }（travel key 由服务端从 sec-check/key 绑定对象解析，前端不传 key）；
-    // 编辑场景旧照片项传 { key }（契约 §1.2 commitSave/commitEdit）
-    const photos = this.data.photos.map((p) =>
-      p.isOld ? { key: p.key } : { photoId: p.photoId }
-    );
+    // 4) 提交写库（幂等；服务端 CopyObject 转正 travel/ 后落库）+ 回读确认
     const payload = {
-      date: this.data.date,
-      place: (this.data.place || '').trim(),
-      note: this.data.note || '',
-      // 标签体系下架（S8）：编辑保留原记录标签（原样回传，服务端豁免存量），新增为空
-      tags: (this._origin && this._origin.tags) || [],
-      photos
+      date: snap.date,
+      place: snap.place,
+      note: snap.note,
+      tags: snap.tags,
+      photos: snap.photos.map((p) => (p.isOld ? { key: p.key } : { photoId: p.photoId }))
     };
-    // 坐标同有同无（契约 §0.4）
-    if (typeof this._lat === 'number' && typeof this._lng === 'number') {
-      payload.lat = this._lat;
-      payload.lng = this._lng;
+    if (typeof snap.lat === 'number' && typeof snap.lng === 'number') {
+      payload.lat = snap.lat;
+      payload.lng = snap.lng;
     }
-    if (this.data.isEdit) return this.commitEdit(payload, ctx);
-    return this.commitSave(payload, ctx);
+    await this.commitEditSnap(payload, snap, ctx);
   },
 
-  // 编辑提交（同步链专用；草稿链不走此处）
-  commitEdit(payload, ctx) {
-    const editId = this.data.editId;
+  // 编辑提交：无应答重发同一请求至终态（同值覆盖幂等）；提交后回读比对，一致才算确认。
+  // 返回 true=确认成功；false=结果未确认（重发耗尽/回读遇网络异常）——不断言失败，按成功收尾
+  // 并失效缓存，记录实际状态以回读数据为准（§5.4）
+  commitEditSnap(payload, snap, ctx) {
+    const editId = ctx.editId;
     const toSend = Object.assign({
       action: 'commitEdit',
       footprintId: editId,
-      removedKeys: this._removedKeys
+      removedKeys: snap.removedKeys
     }, payload);
-    const confirm = (fp) => {
-      this.throwIfCancelled(ctx);
-      if (this.editMatches(fp, payload, editId)) return this.onSaveSuccess(ctx);
-      return this.onSaveUnconfirmed();
-    };
     const attempt = (remaining) => request.callFunction('secCheck', toSend)
       .then((data) => {
         db.invalidateFootprintsCache();
         const footprintId = (data && data.footprintId) ? data.footprintId : editId;
-        return db.getFootprint(footprintId, { force: true }).then((fp) => confirm(fp));
+        return db.getFootprint(footprintId, { force: true }).then((fp) => {
+          this.throwIfCancelled(ctx);
+          return this.editMatches(fp, payload, editId);
+        });
       })
       .catch((err) => {
-        // 无应答：重发同一请求直到终态（同值覆盖幂等）
         if (err && err.transport && remaining > 1) {
           return new Promise((resolve) => setTimeout(() => resolve(attempt(remaining - 1)), 2000));
         }
-        // §5.4：edit 重发耗尽 或 回读遇网络异常（err.network）-> 一律「结果未确认」，不得落入「保存失败」
-        if (err && (err.transport || err.network)) return this.onSaveUnconfirmed();
-        throw err; // 1004 等由 handleSaveError 分流
+        if (err && (err.transport || err.network)) return false; // 结果未确认，不落失败徽标
+        throw err; // 1004 等由 failEdit 分流
       });
     return attempt(4);
   },
@@ -360,76 +412,49 @@ module.exports = {
     return true;
   },
 
-  // 保存成功（编辑同步链）：轻提示后重开详情页（编辑并刷新其 onLoad）；表单已重置
-  onSaveSuccess(ctx) {
-    this.throwIfCancelled(ctx);
-    const editId = this.data.editId;
-    this._clientSaveId = null;
-    this._reviewSubmitAt = {};
-    this.setData({ saving: false, saveError: null });
-    wx.showToast({ title: '保存成功', icon: 'success' });
-    this.resetForm();
-    wx.setNavigationBarTitle({ title: '溪山行旅' });
-    // 编辑模式：回详情页并刷新。编辑入口的 detail 已被 switchTab 销毁（tab 页无返回栈可退），
-    // 重开详情页，其 onLoad 重新拉取记录与签名 URL 即最新值（FR-13）
-    setTimeout(() => wx.navigateTo({ url: '/pages/detail/detail?id=' + editId }), 800);
-  },
-
-  // §5.4：编辑结果未确认（重发仍无应答/回读不一致）-> 不断言失败，回详情页按回读数据展示实际状态
-  onSaveUnconfirmed() {
+  // 编辑链成功：删编辑草稿、失效缓存、刷新时间线与详情（徽标消失，记录展示新内容）
+  finishEdit(ctx) {
+    if (this._editChains && this._editChains[ctx.editId] === ctx) delete this._editChains[ctx.editId];
+    drafts.remove(ctx.draftId);
     db.invalidateFootprintsCache();
-    this._clientSaveId = null;
-    this.setData({ saving: false, saveError: null });
-    wx.showToast({ title: '结果未确认，请到详情查看', icon: 'none' });
-    wx.setNavigationBarTitle({ title: '溪山行旅' });
-    setTimeout(() => wx.navigateTo({ url: '/pages/detail/detail?id=' + this.data.editId }), 800);
+    draftCleanup.forEachPhotoCleanup(this, ctx);
+    refreshTimeline();
+    refreshDetail(ctx.editId);
   },
 
-  // 编辑链错误分流（同步链专属；草稿链失败走 failDraft）
-  handleSaveError(err, ctx) {
-    if (err && err.cancelled) return; // 取消/退出：静默
-    if (ctx && ctx.isEdit && ctx !== this._saveCtx) return; // 旧轮次编辑链回调：丢弃
-    this.setData({ saving: false });
-    if (request.isFieldError(err)) {
-      // 2001：定位字段；2002：定位到具体照片（状态已在轮询时标注）
-      if (err.code === 2001) this.locateTextField(err);
-      this.setData({ saveError: { message: errorText.secErrorText(err), retryable: false } });
+  // 编辑链失败：不弹层，失败原因落在记录上——编辑草稿标 failed，时间线/详情显示徽标，
+  // 点击恢复编辑表单可改可重试；轻提示一次（不打断，无弹层）
+  // 2005（审核与照片对不上）：服务端已冻结 pass 的 photoId，重试必须换新 photoId，此处一并重置
+  failEdit(ctx, snap, err) {
+    if (err && err.cancelled) return;
+    if (this._editChains && this._editChains[ctx.editId] === ctx) delete this._editChains[ctx.editId];
+    draftCleanup.forEachPhotoCleanup(this, ctx);
+    if (request.isNotFound(err)) { // 1004：记录已被删除，编辑无从落地，直接丢弃编辑草稿
+      drafts.remove(ctx.draftId);
+      refreshTimeline();
       return;
     }
-    if (err && err.code === 2005) { // REVIEW_MISMATCH：审核与照片对不上，需重新走审核
-      this.resetReviewState();
-      this.setData({ saveError: { message: errorText.secErrorText(err), retryable: false } });
-      return;
+    const draft = drafts.get(ctx.draftId) || Object.assign({
+      id: ctx.draftId,
+      editId: ctx.editId,
+      clientSaveId: ctx.clientSaveId,
+      createdAt: Date.now()
+    }, snap);
+    draft.status = 'failed';
+    draft.error = errorText.secErrorText(err);
+    if (err && err.code === 2005) {
+      draft.photos = draft.photos.map((p) => (p.isOld ? p : Object.assign({}, p, {
+        photoId: uuidUtil.uuid(),
+        status: 'ready',
+        progress: 0
+      })));
+      draft.clientSaveId = null; // 旧 clientSaveId 已可能半途写库，重试换新防幂等回读旧结果
     }
-    if (request.isNotFound(err)) { // 1004：编辑对象已被删
-      this.setData({ saveError: { message: errorText.secErrorText(err), retryable: false } });
-      return;
-    }
-    // 2003/2004/3001/9000/网络：给重试入口（沿用同一 clientSaveId，幂等）
-    this.setData({ saveError: { message: errorText.secErrorText(err), retryable: true } });
-  },
-
-  locateTextField(err) {
-    const results = (err.data && err.data.results) || [];
-    const patch = {};
-    results.forEach((r) => {
-      if (r.pass) return;
-      if (r.field === 'place') patch.placeError = '地点' + '包含不适宜内容，请修改';
-      if (r.field === 'note') patch.noteError = '备注包含不适宜内容，请修改';
-    });
-    if (!Object.keys(patch).length) patch.noteError = errorText.secErrorText(err);
-    this.setData(patch);
-  },
-
-  resetReviewState() {
-    // 2005：三元组对不上 -> 整链重走。已过审的 photoId 被服务端冻结（task=pass 拒绝再签发，§4.2），
-    // 必须为全部新照片换新 photoId 从签发开始重来；clientSaveId 作废
-    this._clientSaveId = null;
-    this._reviewSubmitAt = {};
-    const photos = this.data.photos.map((p) =>
-      p.isOld ? p : Object.assign({}, p, { photoId: uuidUtil.uuid(), status: 'ready', progress: 0 })
-    );
-    this.setData({ photos });
+    drafts.upsert(draft);
+    console.error('[Footprints] edit publish failed:', err && err.code, draft.error, err && err.data);
+    wx.showToast({ title: '修改未保存成功，' + draft.error, icon: 'none', duration: 4000 });
+    refreshTimeline();
+    refreshDetail(ctx.editId);
   }
 };
 

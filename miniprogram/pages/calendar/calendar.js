@@ -104,6 +104,7 @@ Page({
       inMonth: c.inMonth,
       isToday: c.date === todayStr,
       isSelected: c.date === selectedDate,
+      hasRecord: false,
       dot: false,
       thumb: '',
       loading: false      // 有首图但签名未完成 → 加载中占位
@@ -161,13 +162,15 @@ Page({
     return { byDate, thumbKey, urls: contentCache.getSignedMap(constants.PROCESS_THUMB) };
   },
 
-  // 回填格子：dot（有记录但全部无图，或签名失败降级）/ loading（有首图但签名未完成）/ thumb（已签发则有值）
+  // 回填格子：hasRecord（有记录，无图时加粗数字标记）/ dot（无图或签名失败降级）/
+  // loading（有首图但签名未完成）/ thumb（已签发则有值，盖过日期数字）
   _paint(entry, withThumbs) {
     const cells = this.data.cells.map((c) => {
-      if (!c.inMonth) return Object.assign({}, c, { dot: false, thumb: '', loading: false });
+      if (!c.inMonth) return Object.assign({}, c, { hasRecord: false, dot: false, thumb: '', loading: false });
       const key = entry.thumbKey[c.date];
       const signed = key && entry.urls[key];
       return Object.assign({}, c, {
+        hasRecord: !!entry.byDate[c.date],
         dot: !!entry.byDate[c.date] && (!key || (!!entry.signFailed && !signed)),
         thumb: withThumbs && signed ? signed.url : '',
         loading: !!key && !signed && !entry.signFailed
@@ -192,7 +195,13 @@ Page({
     const need = keys
       .filter((k) => !entry.urls[k] || entry.urls[k].expireAt - now < SIGN_REFRESH_MARGIN_MS)
       .slice(0, SIGN_BATCH_MAX);
-    if (!need.length) return;
+    if (!need.length) {
+      // 全部命中缓存也要回填格图：否则格子停在「无 thumb 无 dot」的漏标态（编辑后有图不显示的根因）
+      if (seq !== this._loadSeq || ym !== this._ym()) return;
+      this._paint(entry, true);
+      this._renderDayList(entry);
+      return;
+    }
     request.callFunction('ossSts', {
       action: 'sign',
       items: need.map((k) => ({ key: k, process: constants.PROCESS_THUMB }))
@@ -228,7 +237,7 @@ Page({
       };
     });
     this.setData({
-      dayTitle: dateUtil.displayDateCn(date) + ' · ' + recs.length + '条行旅记录',
+      dayTitle: dateUtil.displayDateCn(date),
       dayRecords: recs
     });
   }

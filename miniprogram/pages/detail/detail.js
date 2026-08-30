@@ -6,6 +6,7 @@ const request = require('../../utils/request');
 const constants = require('../../utils/constants');
 const dateUtil = require('../../utils/date');
 const contentCache = require('../../utils/content-cache');
+const drafts = require('../../utils/drafts');
 
 Page({
   data: {
@@ -16,7 +17,10 @@ Page({
     dateText: '',      // YYYY/MM/DD 大标题
     photoUrls: [],     // 与 fp.photos 同序的签名 URL
     photoFailed: false,
-    deleting: false
+    deleting: false,
+    editFailed: false, // 乐观编辑链失败 → 徽标提示，点击恢复编辑表单（S8）
+    editDraftId: '',
+    editError: ''
   },
 
   onLoad(options) {
@@ -51,6 +55,7 @@ Page({
           fp,
           dateText: dateUtil.displayDate(fp.date)
         });
+        this.refreshEditDraftBadge();
         this.signPhotos(fp);
       })
       .catch((err) => {
@@ -68,6 +73,22 @@ Page({
 
   onRetryLoad() {
     this.loadDetail({ force: true });
+  },
+
+  // 乐观编辑链失败徽标：本条记录存在 failed 编辑草稿时展示，点击恢复编辑表单重试（S8）
+  refreshEditDraftBadge() {
+    const hit = drafts.listAll().find((d) => d.editId === this.fpId && d.status === 'failed') || null;
+    this.setData({
+      editFailed: !!hit,
+      editDraftId: hit ? hit.id : '',
+      editError: hit ? (hit.error || '') : ''
+    });
+  },
+
+  onRetryEdit() {
+    if (!this.data.editDraftId) return;
+    getApp().globalData.restoreEditDraftId = this.data.editDraftId;
+    wx.switchTab({ url: '/pages/add/add' });
   },
 
   // 全部 key 一次批量 sign（契约 §1.3：items 1~100，process 白名单 PROCESS_FULL）

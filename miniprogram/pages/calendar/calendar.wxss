@@ -101,13 +101,17 @@
   color: var(--color-text-disabled);
 }
 
-.cell-inner--today {
-  border-color: var(--color-action-bg);
+.cell-inner--today .cell-day {
+  font-weight: 600;
 }
 
 .cell-inner--selected {
-  border-color: var(--color-border-control);
   background: var(--color-bg-hover);
+}
+
+/* 当天有记录但无首图：加粗日期数字作标记 */
+.cell-inner--has-record .cell-day {
+  font-weight: 600;
 }
 
 .cell-dot {
@@ -116,11 +120,6 @@
   height: 12rpx;
   border-radius: var(--radius-full);
   background: var(--color-action-bg);
-}
-
-/* 图例 */
-.legend {
-  padding: var(--space-2) var(--space-5) 0;
 }
 
 /* 当日记录 */

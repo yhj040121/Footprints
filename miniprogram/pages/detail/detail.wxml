@@ -27,8 +27,11 @@
       <view class="head">
         <view class="date-title">{{dateText}}</view>
         <view class="place-row">
-          <text class="place-icon">⌖</text>
           <text class="place-text">{{fp.place}}</text>
+        </view>
+        <!-- 乐观编辑链失败徽标（S8）：点击恢复编辑表单重试 -->
+        <view wx:if="{{editFailed}}" class="edit-failed-badge" bindtap="onRetryEdit">
+          <text>{{editError || '修改未保存成功'}} · 点击处理</text>
         </view>
         <!-- 标签展示：标签体系待重写（S8），暂不下发 -->
       </view>

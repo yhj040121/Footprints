@@ -11,12 +11,11 @@
   </view>
   <view class="body">
     <view class="place">
-      <text class="place-icon">⌖</text>
       <text class="place-text">{{record.place}}</text>
     </view>
     <view class="note">{{record.note}}</view>
-    <!-- 后台保存过程保持无感；仅失败时提示并允许点击恢复处理 -->
-    <view wx:if="{{record.isDraft && record.draftStatus === 'failed'}}" class="draft-badge">
+    <!-- 后台保存/编辑过程保持无感；失败时在对应记录上提示并允许点击恢复处理（乐观保存 S8） -->
+    <view wx:if="{{record.draftStatus === 'failed'}}" class="draft-badge">
       <text>{{record.draftError || '未保存成功'}} · 点击处理</text>
     </view>
   </view>
