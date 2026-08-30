@@ -342,25 +342,40 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   assert('回读失败时更新已生效（仅出参 9000）', store.userDocs.get(openid).nickname === '回读失败', store.userDocs.get(openid));
   const up10 = await call(loginMain, { action: 'updateProfile', nickname: 'x' }, 'o_no_user');
   assert('update 未命中任何文档 → 9000', up10.code === 9000, up10);
-  // S7-R5：removeCustomTags（只删不加 / 未命中忽略 / 删除-only / 删除+改昵称混合 / 删历史 7~10 字存量标签）
+  // S7-R6：removeCustomTags 六类用例（②删除-only / ③删除+改昵称混合 / ④含不存在项忽略 /
+  // ⑤夹带新文本不入库 / 删历史 7~10 字存量旧标签 / 空数组 1001）--直测 login 云函数生产实现
   const OLD7 = '九曲黄河万里沙'; // 7 字存量旧标签（S7-R4 前创建，删除不受 1~6 限制）
-  store.userDocs.get(openid).customTags = ['沙漠', '星空', OLD7];
+  const OLD10 = '十年磨一剑霜刃未曾试'; // 10 字存量旧标签
+  store.userDocs.get(openid).customTags = ['沙漠', '星空', OLD7, OLD10];
   const up11 = await call(loginMain, { action: 'updateProfile', removeCustomTags: ['沙漠'] });
   assert(
-    '删除-only：仅删命中项，其余保留',
-    up11.code === 0 && up11.data.profile.customTags.includes('星空') && up11.data.profile.customTags.includes(OLD7) && !up11.data.profile.customTags.includes('沙漠'),
+    '②删除-only：仅删命中项，其余保留（头像昵称不动）',
+    up11.code === 0 &&
+      !up11.data.profile.customTags.includes('沙漠') &&
+      up11.data.profile.customTags.length === 3 &&
+      up11.data.profile.nickname === '回读失败',
     up11
   );
   const up12 = await call(loginMain, { action: 'updateProfile', removeCustomTags: ['星空'], nickname: '  新昵称  ' });
   assert(
-    '删除+改昵称混合：一次提交均生效',
-    up12.code === 0 && up12.data.profile.nickname === '新昵称' && !up12.data.profile.customTags.includes('星空') && up12.data.profile.customTags.includes(OLD7),
+    '③删除+改昵称混合：一次提交均生效',
+    up12.code === 0 && up12.data.profile.nickname === '新昵称' && !up12.data.profile.customTags.includes('星空') && up12.data.profile.customTags.length === 2,
     up12
   );
-  const up13 = await call(loginMain, { action: 'updateProfile', removeCustomTags: ['不存在标签', '绝不新增'] });
-  assert('含不存在项忽略、夹带新标签不入库', up13.code === 0 && up13.data.profile.customTags.length === 1 && up13.data.profile.customTags[0] === OLD7, up13);
-  const up14 = await call(loginMain, { action: 'updateProfile', removeCustomTags: [OLD7] });
-  assert('删除 7 字存量旧标签 → 允许（清空）', up14.code === 0 && up14.data.profile.customTags.length === 0, up14);
+  const up13 = await call(loginMain, { action: 'updateProfile', removeCustomTags: [OLD7, '从未创建过的标签'] });
+  assert(
+    '④含不存在项 → 忽略不报错（7 字存量删除成功、未命中项跳过）',
+    up13.code === 0 && !up13.data.profile.customTags.includes(OLD7) && up13.data.profile.customTags.length === 1 && !up13.data.profile.customTags.includes('从未创建过的标签'),
+    up13
+  );
+  const up14 = await call(loginMain, { action: 'updateProfile', removeCustomTags: ['想夹带的新文本'] });
+  assert(
+    '⑤夹带新文本 → 不入库（不报错、不新增）',
+    up14.code === 0 && !up14.data.profile.customTags.includes('想夹带的新文本') && up14.data.profile.customTags.length === 1,
+    up14
+  );
+  const up14b = await call(loginMain, { action: 'updateProfile', removeCustomTags: [OLD10] });
+  assert('删除 10 字存量旧标签 → 允许（清空）', up14b.code === 0 && up14b.data.profile.customTags.length === 0, up14b);
   const up15 = await call(loginMain, { action: 'updateProfile', removeCustomTags: [] });
   assert('removeCustomTags 空数组 → 1001', up15.code === 1001, up15);
   store.userDocs.get(openid).customTags = ['沙漠']; // 恢复 secCheck 段依赖的初始标签
@@ -442,16 +457,32 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   assert('commitEdit 新增项未命中 customTags → 1001', e2.code === 1001, e2);
   const e3 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠', '星空'], photos: [{ key: travelKey }], removedKeys: [] });
   assert('commitEdit 新增项命中 customTags → 通过', e3.code === 0, e3);
-  // S7-R5：存量旧标签豁免补格式层——保留项（数量>3、7~10 字）整体放行，仅新增项执行 3/6
+  // S7-R6：存量标签豁免——旧记录带 4~10 个标签或单个 7~10 字，仅改备注须保存成功（直测生产实现）
+  store.userDocs.set(openid, { ...store.userDocs.get(openid), customTags: ['星空'] });
   store.footprintDocs.get(fid).tags = ['沙漠', '星光巷', '枕水人家', '七字旧标签甲乙'];
   const e4 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠', '星光巷', '枕水人家', '七字旧标签甲乙'], photos: [{ key: travelKey }], removedKeys: [] });
-  assert('保留 4 个存量旧标签（含 7 字）整体放行', e4.code === 0, e4);
+  assert('⑥-1 保留 4 个存量旧标签（含 7 字）仅改备注 → 通过', e4.code === 0, e4);
   store.userDocs.set(openid, { ...store.userDocs.get(openid), customTags: ['星空', '新增的七字标签'] });
   const e5 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠', '新增的七字标签'], photos: [{ key: travelKey }], removedKeys: [] });
   assert('新增项超 6 字 → 1001（豁免仅限保留项）', e5.code === 1001, e5);
   store.userDocs.set(openid, { ...store.userDocs.get(openid), customTags: ['星空', '新一', '新二', '新三', '新四'] });
   const e6 = await call(secCheckMain, { action: 'commitEdit', footprintId: fid, date: '2026-08-29', place: '无锡', note: '改备注', tags: ['沙漠', '新一', '新二', '新三', '新四'], photos: [{ key: travelKey }], removedKeys: [] });
   assert('新增项超过 3 个 → 1001（豁免仅限保留项）', e6.code === 1001, e6);
+  // ⑥-2：再一条带 5 个标签（4~10 档）的存量记录——直接用 store 写入（等价 S7-R4 前落库的历史数据，
+  // 直读生产 handleCommitEdit 验证「整体放行」），仅改备注须保存成功（复用 fid 原照片 key）
+  const fid5 = 'fp_stock_5tags';
+  store.footprintDocs.set(fid5, {
+    _id: fid5,
+    _openid: openid,
+    date: '2026-08-29',
+    place: '同里',
+    note: '旧备注',
+    tags: ['沙漠', '星光', '烟火', '水乡', '旧风物'],
+    photos: [{ key: travelKey }],
+    createdAt: Date.now(),
+  });
+  const e5b = await call(secCheckMain, { action: 'commitEdit', footprintId: fid5, date: '2026-08-29', place: '同里', note: '仅改备注', tags: ['沙漠', '星光', '烟火', '水乡', '旧风物'], photos: [{ key: travelKey }], removedKeys: [] });
+  assert('⑥-2 存量 5 个标签仅改备注 → 通过（整体放行）', e5b.code === 0, e5b);
 
   console.log('=== ossSts.sign 批量 in 查询 ===');
   const s1 = await call(ossStsMain, { action: 'sign', items: [{ key: travelKey }] });

@@ -4,8 +4,8 @@
  * S6-R3：customTags 服务端写入——`field="customTag"` 且审核通过的项，由服务端原子追加到
  * 本人 `user.customTags`（去重、新建单个 1~6 字（S7-R4）、总数 ≤10 个，超上限 1001），出参 `customTags`
  * 返回追加后的完整标签数组；客户端对 customTags 无写权限（契约 §2.4 字段级规则）。
- * S7-R5：新建 customTag 长度与事务写入前各校验一次（创建校验 + appendCustomTags 内再查），
- * 超 6 字 → 1001，杜绝「可创建 7~10 字标签但 commit 拒绝」的脏数据。
+ * S7-R5/R6：新建 customTag 长度与事务写入前各校验一次（创建校验 + appendCustomTags 内再查），
+ * 超 6 字或空串 → 1001，杜绝「可创建 7~10 字标签但 commit 拒绝」的脏数据。
  * 入参去重（S6-R3）：texts 内 field+content 组合重复 → 1001。
  */
 const { BizError, ok, fail } = require('../lib/errors');
@@ -52,7 +52,7 @@ async function appendCustomTags(openid, tagsToAdd) {
     const seen = new Set(current);
     const result = [...current];
     for (const t of tagsToAdd) {
-      if (t.length > MAX_CUSTOM_TAG_CHARS) throw new BizError(1001); // 新建单个 ≤6 字（S7-R4）
+      if (!t.length || t.length > MAX_CUSTOM_TAG_CHARS) throw new BizError(1001); // 新建单个 1~6 字（S7-R4；空串同拒）
       if (seen.has(t)) continue; // 去重（当前已有或本批已加）
       seen.add(t);
       result.push(t);
