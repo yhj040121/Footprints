@@ -6,6 +6,7 @@ const config = require('../../utils/config');
 const request = require('../../utils/request');
 const db = require('../../utils/db');
 const drafts = require('../../utils/drafts');
+const contentCache = require('../../utils/content-cache');
 
 const ACTION_WIDTH_RPX = 300; // 左滑展开操作区宽：「导出」「删除」各约 150rpx
 const INK_COLOR = '#35322C';  // 弹窗确认按钮墨色（对齐色板 --color-action-bg）
@@ -57,7 +58,8 @@ Page({
   },
 
   onPullDownRefresh() {
-    this.loadFirst().then(() => wx.stopPullDownRefresh());
+    db.invalidateFootprintsCache();
+    this.loadFirst({ force: true }).then(() => wx.stopPullDownRefresh());
   },
 
   onReachBottom() {
@@ -83,11 +85,15 @@ Page({
 
   // ---------- load ----------
 
-  loadFirst() {
+  loadFirst(options) {
     const app = getApp();
-    this.setData({ loading: true, loginError: false });
+    // 已有内容时静默刷新，避免切换 tab 出现整页骨架闪烁。
+    this.setData({ loading: this.data.list.length === 0, loginError: false });
     return Promise.resolve(app.globalData.loginReady)
-      .then(() => db.listFootprintsPage(0, constants.PAGE_SIZE))
+      .then(() => {
+        this._coverCache = Object.assign({}, contentCache.getSignedMap(constants.PROCESS_THUMB), this._coverCache);
+        return db.listFootprintsPage(0, constants.PAGE_SIZE, options);
+      })
       .then((res) => {
         const list = this.mergeDrafts(this.decorateList(res.list));
         this._loadedOnce = true;
@@ -104,7 +110,7 @@ Page({
   onRetryLogin() {
     const app = getApp();
     if (app.globalData.loginFailed && app.relogin) app.relogin(); // loadFirst 会 await 新的 loginReady
-    this.loadFirst();
+    this.loadFirst({ force: true });
   },
 
   // 记录 → 列表条目（补展示字段；封面 URL 命中缓存则直接回填）
@@ -112,9 +118,10 @@ Page({
     return records.map((rec) => {
       const coverKey = rec.photos && rec.photos.length ? rec.photos[0].key : '';
       const cached = coverKey ? this._coverCache[coverKey] : null;
+      const validCover = cached && cached.expireAt > Date.now() + 60000;
       return Object.assign({}, rec, {
         coverKey,
-        coverUrl: cached ? cached.url : '',
+        coverUrl: validCover ? cached.url : '',
         dateYear: (rec.date || '').slice(0, 4),
         dateMd: (rec.date || '').slice(5).replace('-', '.'),
         showDate: false,
@@ -212,9 +219,11 @@ Page({
       action: 'sign',
       items: keys.map((key) => ({ key, process: constants.PROCESS_THUMB }))
     }).then((data) => {
-      (data.urls || []).forEach((u) => {
+      const urls = data.urls || [];
+      urls.forEach((u) => {
         this._coverCache[u.key] = { url: u.url, expireAt: u.expireAt || 0 };
       });
+      contentCache.setSignedMany(constants.PROCESS_THUMB, urls);
       this.applyCovers();
     }).catch(() => {
       // 封面签名失败静默降级：卡片显示「无图」占位，下次进页自动重签
@@ -370,6 +379,7 @@ Page({
     const finish = () => { wx.hideLoading(); };
     const success = () => {
       finish();
+      db.invalidateFootprintsCache();
       this.removeFromList(id);
       wx.showToast({ title: '已删除', icon: 'success' });
     };
@@ -384,7 +394,7 @@ Page({
       });
     };
     const reRead = () => {
-      db.getFootprint(id)
+      db.getFootprint(id, { force: true })
         .then((fp) => (fp ? unconfirmed() : success()))
         .catch(() => unconfirmed());
     };

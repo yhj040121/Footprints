@@ -16,19 +16,24 @@
 }
 
 .avatar-btn {
+  width: 160rpx;
+  height: 160rpx;
   margin: 0;
   padding: 0;
-  background: transparent;
+  overflow: hidden;
+  background: var(--color-bg-subtle);
+  border: 1rpx solid var(--color-border-subtle);
   line-height: 1;
   border-radius: var(--radius-full);
 }
 .avatar-btn::after { border: none; }
 
 .avatar {
+  display: block;
   width: 160rpx;
   height: 160rpx;
   border-radius: var(--radius-full);
-  border: 1rpx solid var(--color-border-subtle);
+  background: var(--color-bg-subtle);
 }
 /* 未设置头像：灰圆占位 */
 .avatar--empty {
@@ -182,7 +187,7 @@
   transition: width var(--duration-normal);
 }
 
-/* 设置弹层 */
+/* 关于我们弹层 */
 .settings-label {
   margin-bottom: var(--space-1);
   font-size: var(--text-sm);
@@ -200,6 +205,6 @@
   position: fixed;
   left: -9999rpx;
   top: -9999rpx;
-  width: 640px;
-  height: 640px;
+  width: 256px;
+  height: 256px;
 }

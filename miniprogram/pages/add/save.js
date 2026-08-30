@@ -194,6 +194,7 @@ module.exports = {
   // 草稿链成功：删草稿、刷新时间线（正式记录出现）；无弹层（保存瞬间的 toast 已给过反馈）
   finishDraft(ctx) {
     drafts.remove(ctx.draftId);
+    db.invalidateFootprintsCache();
     draftCleanup.forEachPhotoCleanup(this, ctx); // 清本链轮询时间记录（见底部工具函数）
     refreshTimeline();
   },
@@ -309,8 +310,9 @@ module.exports = {
     };
     const attempt = (remaining) => request.callFunction('secCheck', toSend)
       .then((data) => {
+        db.invalidateFootprintsCache();
         const footprintId = (data && data.footprintId) ? data.footprintId : editId;
-        return db.getFootprint(footprintId).then((fp) => confirm(fp));
+        return db.getFootprint(footprintId, { force: true }).then((fp) => confirm(fp));
       })
       .catch((err) => {
         // 无应答：重发同一请求直到终态（同值覆盖幂等）
@@ -373,6 +375,7 @@ module.exports = {
 
   // §5.4：编辑结果未确认（重发仍无应答/回读不一致）-> 不断言失败，回详情页按回读数据展示实际状态
   onSaveUnconfirmed() {
+    db.invalidateFootprintsCache();
     this._clientSaveId = null;
     this.setData({ saving: false, saveError: null });
     wx.showToast({ title: '结果未确认，请到详情查看', icon: 'none' });

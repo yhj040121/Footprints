@@ -5,7 +5,7 @@
   <!-- 头像与昵称：官方填写能力，无授权弹窗（FR-14 ①） -->
   <view class="profile">
     <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" hover-class="none">
-      <image wx:if="{{profile.avatarUrl}}" class="avatar" src="{{profile.avatarUrl}}" mode="aspectFill" />
+      <image wx:if="{{profile.avatarUrl}}" class="avatar" src="{{profile.avatarUrl}}" mode="aspectFit" />
       <view wx:else class="avatar avatar--empty">旅</view>
     </button>
     <input class="nickname" type="nickname" value="{{nickname}}" placeholder="旅人" maxlength="32"
@@ -31,7 +31,7 @@
     </view>
   </view>
 
-  <!-- 功能列表：仅「导出照片到相册」「设置」两项（FR-14，无「旅程档案」；标签管理待 S8 重写后接入） -->
+  <!-- 功能列表：仅「导出照片到相册」「关于我们」两项 -->
   <view class="menu fp-card">
     <view class="menu-item" hover-class="menu-item--hover" bindtap="onExportTap">
       <text class="menu-icon">⇊</text>
@@ -40,8 +40,8 @@
     </view>
     <view class="menu-line"></view>
     <view class="menu-item" hover-class="menu-item--hover" bindtap="onSettingsTap">
-      <text class="menu-icon">⚙</text>
-      <text class="menu-text">设置</text>
+      <text class="menu-icon">ⓘ</text>
+      <text class="menu-text">关于我们</text>
       <text class="menu-arrow">›</text>
     </view>
   </view>
@@ -88,12 +88,12 @@
     </view>
   </view>
 
-  <!-- 设置弹层：仅隐私说明与版本号（FR-14 ④） -->
+  <!-- 关于我们：仅平台简介与版本号 -->
   <view wx:if="{{showSettings}}" class="mask" bindtap="onSettingsClose">
     <view class="panel fp-card" catchtap="noop">
-      <view class="panel-title">设置</view>
-      <view class="settings-label">隐私说明</view>
-      <view class="settings-text">溪山行旅是纯私人的旅行足迹记录工具：你的全部数据仅本人可见；照片以私有方式存储，访问链接按需临时生成且短时有效；小程序不含任何公开分享功能。</view>
+      <view class="panel-title">关于我们</view>
+      <view class="settings-label">平台简介</view>
+      <view class="settings-text">溪山行旅是一款专注于私人旅行足迹记录的小程序，帮助你按时间、日历和地图整理走过的地方与沿途照片。</view>
       <view class="settings-label">版本号</view>
       <view class="settings-text">V1.0.0</view>
       <button class="fp-btn-primary" bindtap="onSettingsClose">关闭</button>

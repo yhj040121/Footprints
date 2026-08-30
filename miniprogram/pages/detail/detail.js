@@ -5,6 +5,7 @@ const db = require('../../utils/db');
 const request = require('../../utils/request');
 const constants = require('../../utils/constants');
 const dateUtil = require('../../utils/date');
+const contentCache = require('../../utils/content-cache');
 
 Page({
   data: {
@@ -35,9 +36,9 @@ Page({
     }
   },
 
-  loadDetail() {
-    this.setData({ loading: true, photoFailed: false, networkError: false });
-    db.getFootprint(this.fpId)
+  loadDetail(options) {
+    this.setData({ loading: !this.data.fp, photoFailed: false, networkError: false });
+    db.getFootprint(this.fpId, options)
       .then((fp) => {
         this.loadedOnce = true;
         if (!fp) {
@@ -66,7 +67,7 @@ Page({
   },
 
   onRetryLoad() {
-    this.loadDetail();
+    this.loadDetail({ force: true });
   },
 
   // 全部 key 一次批量 sign（契约 §1.3：items 1~100，process 白名单 PROCESS_FULL）
@@ -76,17 +77,27 @@ Page({
       this.setData({ photoUrls: [] });
       return;
     }
+    const byKey = {};
+    keys.forEach((key) => {
+      const cached = contentCache.getSigned(constants.PROCESS_FULL, key);
+      if (cached) byKey[key] = cached.url;
+    });
+    const cachedUrls = keys.map((key) => byKey[key] || '');
+    this.setData({ photoUrls: cachedUrls, photoFailed: false });
+    const need = keys.filter((key) => !byKey[key]);
+    if (!need.length) return;
     request.callFunction('ossSts', {
       action: 'sign',
-      items: keys.map((key) => ({ key, process: constants.PROCESS_FULL }))
+      items: need.map((key) => ({ key, process: constants.PROCESS_FULL }))
     }).then((data) => {
       // 按 fp.photos 原顺序取 url，保证预览左右滑动顺序与记录一致（FR-11 验收 2）
-      const byKey = {};
-      ((data && data.urls) || []).forEach((u) => { byKey[u.key] = u.url; });
+      const signed = (data && data.urls) || [];
+      signed.forEach((u) => { byKey[u.key] = u.url; });
+      contentCache.setSignedMany(constants.PROCESS_FULL, signed);
       const urls = keys.map((k) => byKey[k] || '');
       this.setData({ photoUrls: urls, photoFailed: urls.some((u) => !u) });
     }).catch(() => {
-      this.setData({ photoUrls: [], photoFailed: true });
+      this.setData({ photoUrls: cachedUrls, photoFailed: cachedUrls.some((u) => !u) });
     });
   },
 
@@ -132,6 +143,7 @@ Page({
     const finish = () => { wx.hideLoading(); this.setData({ deleting: false }); };
     const success = () => {
       finish();
+      db.invalidateFootprintsCache();
       wx.showToast({ title: '已删除', icon: 'success' });
       setTimeout(() => wx.navigateBack(), 600);
     };
@@ -147,7 +159,7 @@ Page({
     };
     // 回读裁定：记录已不在 = 删除成功；仍在或回读也失败 = 结果未确认
     const reRead = () => {
-      db.getFootprint(this.fpId)
+      db.getFootprint(this.fpId, { force: true })
         .then((fp) => (fp ? unconfirmed() : success()))
         .catch(() => unconfirmed());
     };

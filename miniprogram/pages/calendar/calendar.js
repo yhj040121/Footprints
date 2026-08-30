@@ -6,6 +6,7 @@ const db = require('../../utils/db');
 const dateUtil = require('../../utils/date');
 const constants = require('../../utils/constants');
 const request = require('../../utils/request');
+const contentCache = require('../../utils/content-cache');
 
 const WEEK_DAYS = ['日', '一', '二', '三', '四', '五', '六'];
 // 签名 URL 有效期 1h（契约 §6），临期 1 分钟内视为待重签
@@ -157,7 +158,7 @@ Page({
       const hit = byDate[d].filter((r) => (r.photos || []).length > 0)[0];
       thumbKey[d] = hit ? hit.photos[0].key : null;
     });
-    return { byDate, thumbKey, urls: {} };
+    return { byDate, thumbKey, urls: contentCache.getSignedMap(constants.PROCESS_THUMB) };
   },
 
   // 回填格子：dot（有记录但全部无图，或签名失败降级）/ loading（有首图但签名未完成）/ thumb（已签发则有值）
@@ -197,7 +198,9 @@ Page({
       items: need.map((k) => ({ key: k, process: constants.PROCESS_THUMB }))
     })
       .then((res) => {
-        ((res && res.urls) || []).forEach((u) => { entry.urls[u.key] = u; });
+        const urls = (res && res.urls) || [];
+        urls.forEach((u) => { entry.urls[u.key] = u; });
+        contentCache.setSignedMany(constants.PROCESS_THUMB, urls);
         if (seq !== this._loadSeq || ym !== this._ym()) return;
         this._paint(entry, true);
         this._renderDayList(entry);

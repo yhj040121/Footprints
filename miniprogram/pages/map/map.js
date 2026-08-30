@@ -5,6 +5,7 @@ const db = require('../../utils/db');
 const dateUtil = require('../../utils/date');
 const request = require('../../utils/request');
 const constants = require('../../utils/constants');
+const contentCache = require('../../utils/content-cache');
 
 // 无任何含坐标记录时的默认中心（无锡附近）与缩放
 const DEFAULT_CENTER = { latitude: 31.57, longitude: 120.30 };
@@ -125,8 +126,9 @@ Page({
   loadThumb(record) {
     const first = (record.photos || [])[0];
     if (!first || !first.key) return;
-    const cached = this._thumbCache[record._id];
+    const cached = this._thumbCache[record._id] || contentCache.getSigned(constants.PROCESS_THUMB, first.key);
     if (cached && cached.expireAt > Date.now()) {
+      this._thumbCache[record._id] = cached;
       this.setData({ 'card.thumb': cached.url });
       return;
     }
@@ -137,6 +139,7 @@ Page({
       const item = (data.urls || [])[0];
       if (!item) return;
       this._thumbCache[record._id] = { url: item.url, expireAt: item.expireAt };
+      contentCache.setSignedMany(constants.PROCESS_THUMB, [item]);
       if (this.data.card && this.data.card.id === record._id) {
         this.setData({ 'card.thumb': item.url });
       }

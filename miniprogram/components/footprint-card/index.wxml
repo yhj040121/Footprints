@@ -15,9 +15,9 @@
       <text class="place-text">{{record.place}}</text>
     </view>
     <view class="note">{{record.note}}</view>
-    <!-- 草稿状态徽标（S8 乐观保存）：syncing=后台审核中 / failed=未保存成功，可点击恢复处理 -->
-    <view wx:if="{{record.isDraft}}" class="draft-badge {{record.draftStatus === 'failed' ? 'draft-badge--failed' : ''}}">
-      <text>{{record.draftStatus === 'failed' ? '未保存成功 · 点击处理' : '保存中…'}}</text>
+    <!-- 后台保存过程保持无感；仅失败时提示并允许点击恢复处理 -->
+    <view wx:if="{{record.isDraft && record.draftStatus === 'failed'}}" class="draft-badge">
+      <text>未保存成功 · 点击处理</text>
     </view>
   </view>
 </view>

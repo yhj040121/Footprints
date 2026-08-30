@@ -72,20 +72,15 @@
   -webkit-line-clamp: 2;
 }
 
-/* 草稿状态徽标（S8 乐观保存） */
+/* 仅展示失败状态；正常后台保存不显示过程状态 */
 .draft-badge {
   margin-top: auto;
   align-self: flex-start;
   padding: 4rpx 16rpx;
   font-size: 20rpx;
   line-height: 1.4;
-  color: #6E685C;
-  background: #F6F1E5;
-  border: 1rpx solid #E2DACA;
-  border-radius: 999rpx;
-}
-.draft-badge--failed {
   color: #8C3B2E;
   background: #F4E3DC;
-  border-color: #CBB8A8;
+  border: 1rpx solid #CBB8A8;
+  border-radius: 999rpx;
 }

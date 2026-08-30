@@ -1,5 +1,5 @@
 // pages/mine/mine.js —— 「我的」Tab（FR-14 我的页 / FR-15 批量导出照片）
-// 布局：头像+昵称（官方填写能力）→ 统计三项 → 功能列表（导出/设置）→ 底部私密文案
+// 布局：头像+昵称（官方填写能力）→ 统计三项 → 功能列表（导出/关于我们）→ 底部私密文案
 const db = require('../../utils/db');
 const request = require('../../utils/request');
 const constants = require('../../utils/constants');
@@ -23,7 +23,7 @@ Page({
     exportDone: 0,
     exportTotal: 0,
     exportPercent: 0,
-    // settings overlay
+    // about overlay（沿用字段名以减少页面状态迁移）
     showSettings: false
   },
 
@@ -323,7 +323,7 @@ Page({
     this.exportCancel = true;
   },
 
-  // ---------- settings (FR-14 ④) ----------
+  // ---------- about ----------
 
   onSettingsTap() {
     this.setData({ showSettings: true });
