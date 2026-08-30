@@ -15,8 +15,9 @@
       <text class="place-text">{{record.place}}</text>
     </view>
     <view class="note">{{record.note}}</view>
-    <view class="tags" wx:if="{{record.tags.length}}">
-      <text wx:for="{{record.tags}}" wx:key="*this" class="fp-chip tag">{{item}}</text>
+    <!-- 草稿状态徽标（S8 乐观保存）：syncing=后台审核中 / failed=未保存成功，可点击恢复处理 -->
+    <view wx:if="{{record.isDraft}}" class="draft-badge {{record.draftStatus === 'failed' ? 'draft-badge--failed' : ''}}">
+      <text>{{record.draftStatus === 'failed' ? '未保存成功 · 点击处理' : '保存中…'}}</text>
     </view>
   </view>
 </view>

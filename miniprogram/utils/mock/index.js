@@ -73,24 +73,19 @@ function textRejected(content) {
 }
 
 const handlers = {
-  // §1.1 login + action=updateProfile（头像/昵称/自定义标签删除）
+  // §1.1 login（头像/昵称；标签体系待重写，removeCustomTags 相关逻辑一并移除，见 S8）
   login(data) {
     const user = store.getUser();
     if (data && data.action === 'updateProfile') {
       const patch = {};
       if (typeof data.avatarUrl === 'string') patch.avatarUrl = data.avatarUrl;
       if (typeof data.nickname === 'string') patch.nickname = data.nickname;
-      if (Array.isArray(data.removeCustomTags)) {
-        const removing = data.removeCustomTags.filter((tag) => typeof tag === 'string');
-        patch.customTags = (user.customTags || []).filter((tag) => removing.indexOf(tag) < 0);
-      }
       const next = Object.assign({}, user, patch);
       store.saveUser(next);
       return ok({
         profile: {
           avatarUrl: next.avatarUrl,
-          nickname: next.nickname,
-          customTags: next.customTags || []
+          nickname: next.nickname
         }
       });
     }
@@ -99,8 +94,7 @@ const handlers = {
       isNewUser: false,
       profile: {
         avatarUrl: user.avatarUrl,
-        nickname: user.nickname,
-        customTags: user.customTags || []
+        nickname: user.nickname
       }
     });
   },
@@ -111,27 +105,9 @@ const handlers = {
     if (action === 'text') {
       const results = (data.texts || []).map((t) => ({ field: t.field, pass: !textRejected(t.content) }));
       const pass = results.every((r) => r.pass);
+      // 标签体系待重写（S8）：不再返回/写入 customTags
       if (!pass) return fail(2001, '文本包含不适宜内容，请修改后再试', { pass, results });
-      // S6-R3：customTag 通过 → 服务端原子追加到 user.customTags（去重、单个 ≤10 字、总数 ≤10 个，超限 1001），
-      // 返回追加后的完整数组；客户端对 customTags 无写权限（§2.4）
-      let customTags = null;
-      const tagTexts = (data.texts || []).filter((t) => t.field === 'customTag' && t.content);
-      if (tagTexts.length) {
-        const user = store.getUser();
-        let custom = (user.customTags || []).slice();
-        for (let k = 0; k < tagTexts.length; k++) {
-          const c = tagTexts[k].content.trim();
-          if (!c) continue;
-          if (c.length > 10) return fail(1001, '单个标签最多 10 字');
-          if (custom.indexOf(c) < 0) {
-            if (custom.length >= 10) return fail(1001, '自定义标签最多 10 个');
-            custom.push(c);
-          }
-        }
-        store.saveUser(Object.assign({}, user, { customTags: custom }));
-        customTags = custom;
-      }
-      return ok({ pass, results, customTags });
+      return ok({ pass, results });
     }
     if (action === 'imageSubmit') {
       // S6-R2：对隔离区对象本体送审，只收 photoId（不再接收 base64 审核副本）

@@ -14,6 +14,7 @@ const imageUtil = require('../../utils/image');
 const review = require('./review');
 const upload = require('./upload');
 const save = require('./save');
+const drafts = require('../../utils/drafts');
 
 Page(Object.assign({
   data: {
@@ -33,22 +34,10 @@ Page(Object.assign({
     noteError: '',
     noteHint: '',          // 同上（备注失焦预审）
     maxNoteLen: constants.MAX_NOTE_LEN,
-    allTags: [],           // 可选标签 = 本人 customTags ∪ 已选旧标签（编辑存量，S7-R4 预设已移除）
-    customTags: [],        // 服务端返回的自定义标签；仅这些标签展示删除入口
-    selectedTags: [],
-    maxTags: constants.MAX_TAGS,
-    maxTagLen: constants.MAX_TAG_LEN,
     photos: [],            // { uid, photoId, tempFilePath, ext, key, url, status, progress, isOld }
     maxPhotos: constants.MAX_PHOTOS,
 
-    // 自定义标签弹窗
-    tagModalVisible: false,
-    tagInput: '',
-    tagError: '',          // 弹窗内轻提示（S7-R4：审核失败不再 toast 打断）
-    tagChecking: false,
-    deletingTag: '',
-
-    // 保存进度弹层
+    // 保存状态
     saving: false,
     saveError: null        // { message, retryable }
   },
@@ -66,7 +55,6 @@ Page(Object.assign({
     this._saveSeq = 0; // 保存轮次 token（save.js：旧轮次回调按 identity 丢弃）
     this._needReset = false;
     this._uploadTaskCount = 0;
-    this._customTags = [];      // 服务端 user.customTags（唯一可选标签来源，S7-R4 无预设）
     this._placeCheckSeq = 0;    // 失焦预审竞态 token
     this._noteCheckSeq = 0;
     this._placeChecked = '';    // 上次预审通过的内容（未变化不重审）
@@ -87,6 +75,14 @@ Page(Object.assign({
     if (tb) tb.setSelected(2);
 
     const app = getApp();
+    // 草稿恢复交接：时间线点「未同步」草稿 → switchTab 过来，恢复表单供修改/重试（S8 乐观保存）
+    const restoreId = app.globalData.restoreDraftId;
+    if (restoreId) {
+      app.globalData.restoreDraftId = null;
+      this.restoreDraft(restoreId);
+      return;
+    }
+
     // 编辑交接：detail 页 switchTab 过来（tab 页无法 navigateTo，见文件头注释）
     const editId = app.globalData.editFootprintId;
     if (editId) {
@@ -101,7 +97,6 @@ Page(Object.assign({
       this._needReset = false;
       this.resetForm();
     }
-    this.refreshTags();
   },
 
   onHide() {
@@ -234,150 +229,6 @@ Page(Object.assign({
     });
   },
 
-  // ---------- 标签（FR-03 S7-R4：全部自定义，无预设；≤3 个、单个 ≤6 字） ----------
-
-  refreshTags() {
-    return db.getProfile().then((p) => {
-      this._customTags = ((p && p.customTags) || []).slice();
-      this.buildTagOptions();
-    }).catch(() => {});
-  },
-
-  // 可选标签 = 本人 customTags ∪ 已选标签（编辑存量记录的旧标签如「徒步」未删时原样可选可保留，
-  // 删除也允许——删除不走审核，S7-R4 编辑兼容）。去重防同一标签渲染两个 chip 导致连动勾选
-  buildTagOptions() {
-    const seen = {};
-    const options = [];
-    this._customTags.concat(this.data.selectedTags).forEach((t) => {
-      if (t && !seen[t]) {
-        seen[t] = true;
-        options.push(t);
-      }
-    });
-    this.setData({ allTags: options, customTags: this._customTags.slice() });
-  },
-
-  onTagToggle(e) {
-    const tag = e.currentTarget.dataset.tag;
-    const selected = this.data.selectedTags.slice();
-    const idx = selected.indexOf(tag);
-    if (idx >= 0) {
-      selected.splice(idx, 1); // 删除不需审核（旧标签同样允许删）
-    } else {
-      if (selected.length >= constants.MAX_TAGS) {
-        wx.showToast({ title: '最多选择 ' + constants.MAX_TAGS + ' 个标签', icon: 'none' });
-        return;
-      }
-      selected.push(tag);
-    }
-    this.markDirty();
-    this.setData({ selectedTags: selected });
-  },
-
-  // 全部现行标签均为自定义标签：角标进入删除，二次确认后由 login.updateProfile 服务端删除。
-  // 编辑记录里仅为兼容而回填的旧标签不在 customTags 中，因此不会展示删除入口。
-  onDeleteCustomTag(e) {
-    const tag = e.currentTarget.dataset.tag;
-    if (!tag || this.data.saving || this.data.deletingTag || this._customTags.indexOf(tag) < 0) return;
-    wx.showModal({
-      title: '删除标签',
-      content: '确认删除「' + tag + '」？已选中的该标签也会移除。',
-      confirmText: '删除',
-      confirmColor: '#8C3B2E',
-      success: (res) => {
-        if (res.confirm) this.deleteCustomTag(tag);
-      }
-    });
-  },
-
-  deleteCustomTag(tag) {
-    this.setData({ deletingTag: tag });
-    request.callFunction('login', {
-      action: 'updateProfile',
-      removeCustomTags: [tag]
-    }).then((data) => {
-      const profile = (data && data.profile) || {};
-      const customTags = Array.isArray(profile.customTags) ? profile.customTags.slice() : [];
-      const previousCustomTags = this._customTags.slice();
-      const selectedTags = this.data.selectedTags.filter((t) =>
-        previousCustomTags.indexOf(t) < 0 || customTags.indexOf(t) >= 0
-      );
-      const app = getApp();
-      if (app) app.globalData.profile = Object.assign({}, app.globalData.profile || {}, profile);
-      this._customTags = customTags;
-      if (selectedTags.length !== this.data.selectedTags.length) this.markDirty();
-      this.setData({ deletingTag: '', selectedTags });
-      this.buildTagOptions();
-    }).catch((err) => {
-      this.setData({ deletingTag: '' });
-      wx.showToast({ title: (err && err.message) || '标签删除失败，请重试', icon: 'none' });
-    });
-  },
-
-  onShowTagModal() {
-    if (this.data.selectedTags.length >= constants.MAX_TAGS) {
-      wx.showToast({ title: '最多选择 ' + constants.MAX_TAGS + ' 个标签', icon: 'none' });
-      return;
-    }
-    this.setData({ tagModalVisible: true, tagInput: '', tagError: '' });
-  },
-
-  onTagInput(e) {
-    // 超 6 字直接截断（S7-R4，不再 toast）
-    this.setData({ tagInput: (e.detail.value || '').slice(0, constants.MAX_TAG_LEN), tagError: '' });
-  },
-
-  onTagModalCancel() {
-    if (this.data.tagChecking) return; // 审核在途不可关闭，防止后台回调写入 stale 标签
-    this.setData({ tagModalVisible: false, tagInput: '', tagError: '' });
-  },
-
-  // 自定义标签：先审后由服务端写入（S6-R3，契约 §1.2 text / FR-03）——
-  // 客户端只调 secCheck.text（field=customTag），通过后服务端原子追加到 user.customTags 并返回完整数组。
-  // S7-R4 无感知审核：过程无状态文案，失败只在弹窗内轻提示，无 toast/无跳转
-  onTagConfirm() {
-    const tag = (this.data.tagInput || '').trim();
-    if (!tag) { this.onTagModalCancel(); return; }
-    // 去重：已存在则直接选中，不产生重复（FR-03 验收 5）
-    if (this.data.allTags.indexOf(tag) >= 0) {
-      const selected = this.data.selectedTags.slice();
-      if (selected.indexOf(tag) < 0 && selected.length < constants.MAX_TAGS) selected.push(tag);
-      this.setData({ tagModalVisible: false, tagInput: '', tagError: '', selectedTags: selected });
-      return;
-    }
-    if (this.data.tagChecking || this.data.saving) return;
-    this.setData({ tagChecking: true });
-    request.callFunction('secCheck', {
-      action: 'text',
-      texts: [{ field: 'customTag', content: tag }]
-    }).then((data) => {
-      // 用服务端返回的完整 customTags 刷新；兜底并上本次标签，保证「输入 ABC → 可选与已选有且只有 ABC」
-      const custom = ((data && data.customTags) || this._customTags.slice()).slice();
-      if (custom.indexOf(tag) < 0) custom.push(tag);
-      this._customTags = custom;
-      const app = getApp();
-      if (app && app.globalData) app.globalData.profile = Object.assign({}, app.globalData.profile || {}, { customTags: custom.slice() });
-      const selected = this.data.selectedTags.slice();
-      if (selected.indexOf(tag) < 0 && selected.length < constants.MAX_TAGS) selected.push(tag);
-      this.markDirty();
-      this.setData({
-        tagChecking: false,
-        tagModalVisible: false,
-        tagInput: '',
-        tagError: '',
-        selectedTags: selected
-      });
-      this.buildTagOptions();
-    }).catch((err) => {
-      this.setData({
-        tagChecking: false,
-        tagError: (err && err.code === 2001)
-          ? '该标签未通过安全检测，请换一个'
-          : ((err && err.message) || '标签暂不可用，请稍后再试')
-      });
-    });
-  },
-
   // ---------- 照片（FR-05） ----------
 
   onAddPhotos() {
@@ -476,18 +327,67 @@ Page(Object.assign({
         noteLen: (fp.note || '').length,
         noteError: '',
         noteHint: '',
-        selectedTags: (fp.tags || []).slice(),
         photos,
         saveError: null
       });
       wx.setNavigationBarTitle({ title: '编辑足迹' });
-      this.buildTagOptions(); // 先同步并集渲染（含旧标签），customTags 随后由 refreshTags 刷新
-      this.refreshTags();
       this.signEditThumbs(photos);
     }).catch(() => {
       wx.hideLoading();
       wx.showToast({ title: '加载失败，请重试', icon: 'none' });
     });
+  },
+
+  // 恢复草稿（S8 乐观保存）：时间线点「未同步」草稿 → 回填表单。照片沿用 photoId/状态可断点续跑；
+  // tempFilePath 跨会话失效时仍回填路径（显示裂图），用户可删后重选。恢复即接管草稿（删旧，重存时新建）
+  restoreDraft(id) {
+    const d = drafts.get(id);
+    if (!d) {
+      wx.showToast({ title: '草稿不存在或已处理', icon: 'none' });
+      return;
+    }
+    drafts.remove(id); // 接管该草稿（下次保存按新草稿落盘；避免「恢复-保存」后旧草稿残留）
+    this._origin = null;
+    this._removedKeys = [];
+    this._clientSaveId = d.clientSaveId || null; // 沿用幂等 id（成功半途时可回读原结果）
+    this._formDirty = true; // 用户改动后再保存会换新 clientSaveId
+    this._lat = typeof d.lat === 'number' ? d.lat : null;
+    this._lng = typeof d.lng === 'number' ? d.lng : null;
+    this._locatedPlace = this._lat !== null ? d.place : null;
+    this._placeCheckSeq += 1;
+    this._noteCheckSeq += 1;
+    this._placeChecked = '';
+    this._noteChecked = '';
+    const photos = (d.photos || []).map((p) => ({
+      uid: ++this._seq,
+      photoId: p.photoId,
+      tempFilePath: p.tempFilePath,
+      ext: p.ext,
+      key: '',
+      url: p.tempFilePath,
+      status: (p.status === 'checking' || p.status === 'uploaded' || p.status === 'upload-failed')
+        ? p.status
+        : 'ready',
+      progress: p.progress || 0,
+      isOld: false
+    }));
+    this.setData({
+      isEdit: false,
+      editId: '',
+      date: d.date,
+      dateText: dateUtil.displayDate(d.date),
+      place: d.place,
+      placeError: '',
+      placeHint: '',
+      hasCoord: this._lat !== null,
+      note: d.note || '',
+      noteLen: (d.note || '').length,
+      noteError: '',
+      noteHint: '',
+      photos,
+      saveError: null
+    });
+    wx.setNavigationBarTitle({ title: '记录足迹' });
   },
 
   // 编辑回填照片：运行时按需签名（§1.3，process 白名单缩略图）
@@ -538,12 +438,10 @@ Page(Object.assign({
       noteLen: 0,
       noteError: '',
       noteHint: '',
-      selectedTags: [],
       photos: [],
       saveError: null
     });
     this._placeChecked = '';
     this._noteChecked = '';
-    this.buildTagOptions();
   }
 }, review, upload, save));

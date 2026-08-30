@@ -30,9 +30,7 @@
           <text class="place-icon">⌖</text>
           <text class="place-text">{{fp.place}}</text>
         </view>
-        <view class="tags" wx:if="{{fp.tags && fp.tags.length}}">
-          <text class="fp-chip" wx:for="{{fp.tags}}" wx:key="*this">{{item}}</text>
-        </view>
+        <!-- 标签展示：标签体系待重写（S8），暂不下发 -->
       </view>
 
       <view class="note fp-card" wx:if="{{fp.note}}">

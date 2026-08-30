@@ -5,9 +5,11 @@ const constants = require('../../utils/constants');
 const config = require('../../utils/config');
 const request = require('../../utils/request');
 const db = require('../../utils/db');
+const drafts = require('../../utils/drafts');
 
 const ACTION_WIDTH_RPX = 300; // 左滑展开操作区宽：「导出」「删除」各约 150rpx
 const INK_COLOR = '#35322C';  // 弹窗确认按钮墨色（对齐色板 --color-action-bg）
+const STALE_DRAFT_MS = 90 * 1000; // 后台链路中断（杀进程/切后台挂起）：syncing 草稿超过该时长标 failed
 
 // 同日分组：同一天只在第一条左侧显示日期（就地修改 list）
 function applyGrouping(list) {
@@ -62,10 +64,14 @@ Page({
     const d = this.data;
     if (d.loading || d.loadingMore || !d.hasMore || d.loginError) return;
     this.setData({ loadingMore: true });
-    db.listFootprintsPage(d.list.length, constants.PAGE_SIZE)
+    // 分页 offset 按已加载的「云端记录」计数（草稿不入云、不计入 skip，避免因草稿混排导致的偏移漏数据）
+    const cloudCount = d.list.filter((it) => !it.isDraft).length;
+    db.listFootprintsPage(cloudCount, constants.PAGE_SIZE)
       .then((res) => {
         const added = this.decorateList(res.list);
-        const list = applyGrouping(d.list.concat(added));
+        // 追加云端页：草稿仅在首屏 mergeDrafts 合并，追加页不重新混排（避免草稿重复/排序抖动）
+        const base = d.list.filter((it) => !it.isDraft);
+        const list = applyGrouping(base.concat(added));
         this.setData({ list, hasMore: res.hasMore, loadingMore: false });
         this.signCovers(added);
       })
@@ -83,11 +89,11 @@ Page({
     return Promise.resolve(app.globalData.loginReady)
       .then(() => db.listFootprintsPage(0, constants.PAGE_SIZE))
       .then((res) => {
-        const list = applyGrouping(this.decorateList(res.list));
+        const list = this.mergeDrafts(this.decorateList(res.list));
         this._loadedOnce = true;
         this.setData({ list, hasMore: res.hasMore, loading: false, expandedId: '' });
         this.measureCard();
-        this.signCovers(list);
+        this.signCovers(list.filter((it) => !it.isDraft));
       })
       .catch(() => {
         // 登录失败或首屏查询失败：统一给「网络不可用」重试入口，不白屏
@@ -113,9 +119,81 @@ Page({
         dateMd: (rec.date || '').slice(5).replace('-', '.'),
         showDate: false,
         offsetX: 0,
-        animating: false
+        animating: false,
+        isDraft: false,
+        draftStatus: '',
+        createdAtTs: this.createdAtTs(rec)
       });
     });
+  },
+
+  // 草稿 → 列表条目（isDraft 标识；封面用本地 tempFilePath 直接展示，不参与 sign）
+  decorateDraft(d) {
+    const photos = d.photos || [];
+    const first = photos[0];
+    return Object.assign({}, {
+      _id: d.id,
+      date: d.date,
+      place: d.place,
+      lat: d.lat,
+      lng: d.lng,
+      note: d.note || '',
+      tags: d.tags || [],
+      photos: photos.map((p) => ({ key: '', url: p.tempFilePath })),
+      coverKey: '',
+      coverUrl: first && first.tempFilePath ? first.tempFilePath : '',
+      dateYear: (d.date || '').slice(0, 4),
+      dateMd: (d.date || '').slice(5).replace('-', '.'),
+      showDate: false,
+      offsetX: 0,
+      animating: false,
+      isDraft: true,
+      draftStatus: d.status || 'syncing',
+      draftError: d.error || '',
+      createdAtTs: d.createdAt || 0
+    });
+  },
+
+  // 把本人草稿（syncing/failed）并入首屏列表，统一按 date desc, createdAt desc 排序（与云端口径一致）
+  mergeDrafts(list) {
+    this.sweepStaleDrafts();
+    const draftsList = drafts.listAll()
+      .filter((d) => d.status === 'syncing' || d.status === 'failed')
+      .map((d) => this.decorateDraft(d));
+    if (!draftsList.length) return list;
+    const seen = {};
+    list.forEach((it) => { seen[it._id] = true; });
+    const merged = list.concat(draftsList.filter((d) => !seen[d._id]));
+    merged.sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (b.createdAtTs || 0) - (a.createdAtTs || 0);
+    });
+    // 排序后重新归组（草稿与记录混排，日期归属需重建）
+    return applyGrouping(merged);
+  },
+
+  // 后台链路中断（杀进程/切后台挂起）：把超过阈值的 syncing 草稿标记为 failed，供用户点击处理
+  sweepStaleDrafts() {
+    const now = Date.now();
+    const list = drafts.listAll(); // 单个引用：就地修改后统一写回（listAll 每次深拷贝，需复用同一数组）
+    let changed = false;
+    list.forEach((d) => {
+      if (d.status === 'syncing' && now - (d.createdAt || 0) > STALE_DRAFT_MS) {
+        d.status = 'failed';
+        d.error = d.error || '保存中断，请点击重试';
+        changed = true;
+      }
+    });
+    if (changed) drafts.saveAll(list);
+  },
+
+  // 统一取 createdAt 时间戳（云端 serverDate 可能是 $date / Date / number）
+  createdAtTs(rec) {
+    const t = rec && rec.createdAt;
+    if (!t) return 0;
+    if (typeof t === 'number') return t;
+    if (t.$date) return t.$date;
+    return new Date(t).getTime() || 0;
   },
 
   // 批量签首图缩略图（契约 §1.3 sign，process=PROCESS_THUMB；一次一页 ≤20 张 <500ms 口径内）
@@ -171,6 +249,13 @@ Page({
   onCardTap(e) {
     const id = e.detail.id;
     if (this.data.expandedId) { this.collapseAll(); return; } // 点任意卡片先收起展开项
+    // 草稿卡：恢复进表单（无云端记录，不打开详情页）
+    const item = this.data.list.find((it) => it._id === id);
+    if (item && item.isDraft) {
+      getApp().globalData.restoreDraftId = id;
+      wx.switchTab({ url: '/pages/add/add' });
+      return;
+    }
     wx.navigateTo({ url: '/pages/detail/detail?id=' + id });
   },
 
@@ -248,12 +333,33 @@ Page({
   onDeleteTap(e) {
     const id = e.currentTarget.dataset.id;
     this.collapseAll();
+    const item = this.data.list.find((it) => it._id === id);
+    if (item && item.isDraft) {
+      this.confirmRemoveDraft(id);
+      return;
+    }
     wx.showModal({
       title: '删除足迹',
       content: '删除后不可恢复，照片将一并删除。',
       confirmText: '删除',
       confirmColor: INK_COLOR,
       success: (res) => { if (res.confirm) this.doDelete(id); }
+    });
+  },
+
+  // 删除本地草稿（S8）：无云端记录，仅清本地 + 列表；调 confirm 后直接删，不走云函数
+  confirmRemoveDraft(id) {
+    wx.showModal({
+      title: '删除草稿',
+      content: '该条尚未保存成功，删除后不可恢复。',
+      confirmText: '删除',
+      confirmColor: INK_COLOR,
+      success: (res) => {
+        if (!res.confirm) return;
+        drafts.remove(id);
+        this.removeFromList(id);
+        wx.showToast({ title: '已删除', icon: 'success' });
+      }
     });
   },
 
@@ -314,6 +420,11 @@ Page({
     this.collapseAll();
     const rec = this.data.list.find((it) => it._id === id);
     if (!rec) return;
+    // 草稿未入库：照片尚未转正，无云端 key，无法导出
+    if (rec.isDraft) {
+      wx.showToast({ title: '草稿保存成功后才能导出', icon: 'none' });
+      return;
+    }
     const photos = rec.photos || [];
     if (!photos.length) {
       wx.showToast({ title: '该条记录没有照片', icon: 'none' });

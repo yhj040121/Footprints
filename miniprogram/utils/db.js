@@ -180,11 +180,11 @@ function getProfile() {
   }
   if (config.USE_MOCK) {
     const u = store.getUser();
-    return Promise.resolve({ avatarUrl: u.avatarUrl, nickname: u.nickname, customTags: u.customTags || [] });
+    return Promise.resolve({ avatarUrl: u.avatarUrl, nickname: u.nickname });
   }
   return db().collection(USER_COLLECTION).where({ _openid: '{openid}' }).limit(1).get().then((res) => {
     const u = res.data[0] || {};
-    return { avatarUrl: u.avatarUrl || null, nickname: u.nickname || null, customTags: u.customTags || [] };
+    return { avatarUrl: u.avatarUrl || null, nickname: u.nickname || null };
   });
 }
 

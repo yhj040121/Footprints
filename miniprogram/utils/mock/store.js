@@ -32,7 +32,6 @@ function getUser() {
     openid: 'mock_openid_local',
     avatarUrl: null,
     nickname: '旅人_mock',
-    customTags: ['沙漠'],
     createdAt: Date.now()
   };
 }

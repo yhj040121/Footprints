@@ -6,7 +6,7 @@ const request = require('./utils/request');
 App({
   globalData: {
     openid: '',
-    profile: null,       // { avatarUrl, nickname, customTags }
+    profile: null,       // { avatarUrl, nickname }（标签体系待重写，customTags 已移除，见 S8）
     loginReady: null,    // Promise，页面可 await 登录完成
     loginFailed: false   // 断网等导致登录失败，页面展示重试入口
   },

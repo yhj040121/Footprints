@@ -72,22 +72,20 @@
   -webkit-line-clamp: 2;
 }
 
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
+/* 草稿状态徽标（S8 乐观保存） */
+.draft-badge {
   margin-top: auto;
-}
-
-.tag {
-  min-height: 44rpx;
-  padding: 2rpx 18rpx;
-  font-size: 22rpx;
-  /* .fp-chip 全局样式被隔离，chip 表面在此自写 */
+  align-self: flex-start;
+  padding: 4rpx 16rpx;
+  font-size: 20rpx;
+  line-height: 1.4;
+  color: #6E685C;
+  background: #F6F1E5;
   border: 1rpx solid #E2DACA;
   border-radius: 999rpx;
-  background: #F6F1E5;
-  color: #6E685C;
-  display: inline-flex;
-  align-items: center;
+}
+.draft-badge--failed {
+  color: #8C3B2E;
+  background: #F4E3DC;
+  border-color: #CBB8A8;
 }
