@@ -1,4 +1,4 @@
-/* pages/mine/mine.wxss —— 我的页（水墨暖纸色，仅复用 app.wxss token；无阴影/渐变/彩色状态色） */
+/* pages/mine/mine.wxss —— 我的页（水墨暖纸色，仅复用 app.wxss token） */
 
 .mine {
   min-height: 100vh;
@@ -35,7 +35,6 @@
   border-radius: var(--radius-full);
   background: var(--color-bg-subtle);
 }
-/* 未设置头像：灰圆占位 */
 .avatar--empty {
   display: flex;
   align-items: center;
@@ -92,7 +91,7 @@
 .menu-item {
   display: flex;
   align-items: center;
-  min-height: 104rpx; /* ≥88rpx 触控目标 */
+  min-height: 104rpx;
 }
 .menu-item--hover { background: var(--color-bg-hover); }
 .menu-icon {
@@ -114,7 +113,7 @@
   background: var(--color-border-subtle);
 }
 
-/* ---------- 弹层（遮罩 + 卡片） ---------- */
+/* ---------- 弹层（关于我们的浮窗） ---------- */
 .mask {
   position: fixed;
   left: 0;
@@ -138,49 +137,6 @@
   font-weight: 500;
 }
 
-/* 日期范围选择 */
-.picker-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 88rpx;
-  margin-bottom: var(--space-3);
-  padding: 0 var(--space-3);
-  background: var(--color-bg-page);
-  border: 1rpx solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-}
-.picker-value { color: var(--color-text-secondary); }
-.range-hint {
-  margin-bottom: var(--space-4);
-  text-align: center;
-}
-.panel-btns { display: flex; }
-.panel-btn { flex: 1; }
-.panel-btn + .panel-btn { margin-left: var(--space-3); }
-
-/* 导出进度 */
-.progress-num {
-  margin-bottom: var(--space-3);
-  text-align: center;
-  font-size: var(--text-xl);
-  font-weight: 500;
-}
-.progress-track {
-  height: 12rpx;
-  margin-bottom: var(--space-5);
-  background: var(--color-bg-subtle);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  background: var(--color-action-bg);
-  border-radius: var(--radius-full);
-  transition: width var(--duration-normal);
-}
-
-/* 关于我们弹层 */
 .settings-label {
   margin-bottom: var(--space-1);
   font-size: var(--text-sm);
@@ -193,7 +149,7 @@
   color: var(--color-text-primary);
 }
 
-/* 头像压缩隐藏画布 */
+/* ---------- 头像压缩隐藏画布 ---------- */
 .hidden-canvas {
   position: fixed;
   left: -9999rpx;

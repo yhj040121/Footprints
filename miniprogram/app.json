@@ -5,7 +5,8 @@
     "pages/add/add",
     "pages/map/map",
     "pages/mine/mine",
-    "pages/detail/detail"
+    "pages/detail/detail",
+    "pages/export/export"
   ],
   "window": {
     "navigationBarBackgroundColor": "#F6F2E9",

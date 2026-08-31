@@ -5,7 +5,11 @@
     "miniprogramRoot": "miniprogram/",
     "cloudfunctionRoot": "cloudfunctions/",
     "packOptions": {
-        "ignore": [],
+        "ignore": [
+            { "type": "file", "value": "miniprogram/assets/bg/2.png" },
+            { "type": "file", "value": "miniprogram/assets/bg/3.png" },
+            { "type": "file", "value": "miniprogram/assets/bg/card-paper-ink1.png" }
+        ],
         "include": []
     },
     "setting": {

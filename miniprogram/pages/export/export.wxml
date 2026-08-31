@@ -1,0 +1,136 @@
+<!-- pages/export/export.wxml —— 导出照片（按地点勾选，统一加入相册）
+  - 顶部：地点名称 / 时间范围 / 重置 三个 chip；
+  - 主体：日期分组的时间线，每组下若干「地点」卡（复选框 + 缩略图 + 地点 + 城市 + 张数 + 箭头）；
+  - 底部固定：全选 + 已选 N 张 + 导出(N) 按钮 -->
+<view class="page">
+  <image class="page-bg" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
+  <mock-badge />
+
+  <!-- 顶部筛选 -->
+  <view class="filter">
+    <view class="filter-row">
+      <view class="chip {{filterPlace ? 'chip--active' : ''}}" hover-class="chip--hover" bindtap="onPlaceFilterTap">
+        <text class="chip-icon pin">⌖</text>
+        <text class="chip-text">{{placeLabel}}</text>
+        <text class="chip-caret">▾</text>
+      </view>
+      <view class="chip {{filterRange ? 'chip--active' : ''}}" hover-class="chip--hover" bindtap="onRangeFilterTap">
+        <text class="chip-icon cal">▦</text>
+        <text class="chip-text">{{rangeLabel}}</text>
+        <text class="chip-caret">▾</text>
+      </view>
+      <view class="chip chip--icon" hover-class="chip--hover" bindtap="onResetTap">
+        <text class="chip-icon reset">↺</text>
+        <text class="chip-text">重置</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 主体列表 -->
+  <scroll-view class="body" scroll-y="true" enhanced="true" show-scrollbar="false">
+    <view wx:if="{{loading}}" class="state">
+      <view class="state-icon">⏳</view>
+      <view class="state-title">正在加载足迹…</view>
+    </view>
+
+    <view wx:elif="{{error}}" class="state">
+      <view class="state-icon">☁</view>
+      <view class="state-title">网络不可用</view>
+      <view class="state-desc">请检查网络后重试</view>
+      <button class="fp-btn-primary state-btn" bindtap="onRetryTap">重试</button>
+    </view>
+
+    <view wx:elif="{{groups.length === 0}}" class="state">
+      <view class="state-icon">⌧</view>
+      <view class="state-title">没有可导出的照片</view>
+      <view class="state-desc">该筛选范围内还没有带照片的足迹</view>
+    </view>
+
+    <view wx:else class="groups">
+      <view class="group" wx:for="{{groups}}" wx:key="date" wx:for-item="group">
+        <view class="group-side">
+          <view class="track">
+            <view class="dot"></view>
+          </view>
+        </view>
+        <view class="group-main">
+          <view class="date">{{group.dateText}}</view>
+          <view class="item fp-card" wx:for="{{group.items}}" wx:key="id" wx:for-item="it"
+            hover-class="item--hover" bindtap="onItemToggle" data-id="{{it.id}}">
+            <view class="check">
+              <view class="check-box {{it.selected ? 'check-box--on' : ''}}">
+                <text wx:if="{{it.selected}}" class="check-tick">✓</text>
+              </view>
+            </view>
+            <view class="thumb-wrap">
+              <image wx:if="{{it.coverUrl}}" class="thumb" src="{{it.coverUrl}}" mode="aspectFill" lazy-load="true" />
+              <view wx:else class="thumb thumb--empty">无图</view>
+            </view>
+            <view class="info">
+              <view class="place">{{it.place}}</view>
+              <view wx:if="{{it.city}}" class="city">
+                <text class="city-icon">⌖</text>
+                <text>{{it.city}}</text>
+              </view>
+              <view class="count">{{it.photoCount}} 张照片</view>
+            </view>
+            <view class="arrow">›</view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 底部操作条 -->
+  <view class="bar">
+    <view class="bar-inner">
+      <view class="select-all" hover-class="select-all--hover" bindtap="onSelectAllTap">
+        <view class="check-box {{allSelected ? 'check-box--on' : ''}}">
+          <text wx:if="{{allSelected}}" class="check-tick">✓</text>
+        </view>
+        <text class="select-all-text">全选</text>
+      </view>
+      <view class="bar-info">已选 {{selectedCount}} 张</view>
+      <button class="export-btn {{selectedCount === 0 ? 'export-btn--disabled' : ''}}"
+        bindtap="onExportTap" disabled="{{selectedCount === 0}}">导出({{selectedCount}})</button>
+    </view>
+    <view class="safe-bottom" />
+  </view>
+
+  <!-- 导出进度 -->
+  <view wx:if="{{exporting}}" class="mask">
+    <view class="panel fp-card" catchtap="noop">
+      <view class="panel-title">正在导出照片</view>
+      <view class="progress-num">{{exportDone}} / {{exportTotal}}</view>
+      <view class="progress-track">
+        <view class="progress-fill" style="width: {{exportPercent}}%;"></view>
+      </view>
+      <button class="fp-btn-plain" bindtap="onExportCancel">取消</button>
+    </view>
+  </view>
+
+  <!-- 自定义日期范围 -->
+  <view wx:if="{{showRangePanel}}" class="mask" bindtap="onRangeCancel">
+    <view class="panel fp-card" catchtap="noop">
+      <view class="panel-title">选择日期范围</view>
+      <picker mode="date" value="{{rangeStart}}" end="{{todayStr}}" bindchange="onRangeStartChange">
+        <view class="picker-row">
+          <text>开始日期</text>
+          <text class="picker-value">{{rangeStart}}</text>
+        </view>
+      </picker>
+      <picker mode="date" value="{{rangeEnd}}" end="{{todayStr}}" bindchange="onRangeEndChange">
+        <view class="picker-row">
+          <text>结束日期</text>
+          <text class="picker-value">{{rangeEnd}}</text>
+        </view>
+      </picker>
+      <view class="range-hint">含起止两日，且不可晚于今天</view>
+      <view class="panel-btns">
+        <button class="fp-btn-plain panel-btn" bindtap="onRangeCancel">取消</button>
+        <button class="fp-btn-primary panel-btn" bindtap="onRangeConfirm">确定</button>
+      </view>
+    </view>
+  </view>
+
+</view>
