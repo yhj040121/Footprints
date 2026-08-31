@@ -1,13 +1,14 @@
-/* 水墨悬浮胶囊 tabBar（成果图样式）：
-   左右留边离屏，nav-bg.png 为正胶囊（两端半圆）+宣纸纹理；
-   中央「＋」墨圆整体坐在栏内（不凸出栏顶），圆心与两侧图标区对齐、略偏上；
+/* 自定义 tabBar（需求文档 §13）：宣纸暖白悬浮胶囊
+   左右边距 22~26rpx、栏高 174~180rpx、底部 18rpx+safe-area；
+   普通图标 88~94rpx、文字 25~26rpx、中央加号 112~120rpx；
+   阴影由 drop-shadow 0.16 降至 0.08~0.10，避免漂浮塑料感；
    安全区只垫在容器 bottom 上一次（真机 bug 修复记录见 git history） */
 .tab-bar {
   position: fixed;
-  left: 20rpx;
-  right: 20rpx;
-  bottom: calc(14rpx + env(safe-area-inset-bottom));
-  height: 164rpx;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: calc(18rpx + env(safe-area-inset-bottom));
+  height: 176rpx;
   z-index: 100;
 }
 
@@ -18,7 +19,7 @@
   width: 100%;
   height: 100%;
   /* drop-shadow 跟随 PNG 胶囊的实际轮廓，不用 box-shadow（方框会露边） */
-  filter: drop-shadow(0 6rpx 16rpx rgba(53, 50, 44, 0.16));
+  filter: drop-shadow(0 6rpx 18rpx rgba(53, 50, 44, 0.09));
 }
 
 .tab-bar__row {
@@ -36,12 +37,15 @@
   align-items: center;
   justify-content: center;
   gap: 6rpx;
-  padding-top: 6rpx; /* 图标区整体略偏上，与中央墨圆圆心平齐（成果图比例） */
+  padding-top: 8rpx; /* 图标区整体略偏上，与中央墨圆圆心平齐 */
 }
 
+/* 按下反馈（§45.1：透明度轻微降低，不缩放） */
+.tab-item-hover { opacity: 0.72; }
+
 .tab-item__icon {
-  width: 88rpx;
-  height: 88rpx;
+  width: 92rpx;
+  height: 92rpx;
   opacity: 0.42;
   transition: opacity 0.2s ease;
 }
@@ -50,18 +54,19 @@
   opacity: 1;
 }
 
+/* 当前 Tab 深墨、未激活灰墨（§13.1） */
 .tab-item__text {
-  font-size: 24rpx;
+  font-size: 26rpx;
   line-height: 1.2;
-  color: #8A8371;
+  color: #8F8875;
 }
 
 .tab-item--active .tab-item__text {
-  color: #35322C;
+  color: #302D28;
   font-weight: 600;
 }
 
-/* 中央水墨「＋」墨圆：直径约为栏高 63%，整体在栏内，无文字标签（成果图） */
+/* 中央水墨「＋」墨圈：112~120rpx，整体在栏内，无文字标签 */
 .tab-center {
   position: relative;
   width: 100%;
@@ -70,10 +75,10 @@
 
 .tab-center__btn {
   position: absolute;
-  top: calc(50% - 18rpx);
+  top: calc(50% - 20rpx);
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 104rpx;
-  height: 104rpx;
-  filter: drop-shadow(0 6rpx 12rpx rgba(53, 50, 44, 0.28));
+  width: 116rpx;
+  height: 116rpx;
+  filter: drop-shadow(0 6rpx 14rpx rgba(53, 50, 44, 0.18));
 }

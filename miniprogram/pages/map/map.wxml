@@ -1,5 +1,6 @@
-<!-- 足迹地图 V1.3：真实地点独立标注、照片 Marker、时间顺序虚线、统计与底部详情卡片。
-     微信原生 <map> 底图无法完全水墨化，仅加不拦截手势的水墨装饰层（.map-wash）。 -->
+<!-- 足迹地图（需求文档 §21-§32 重构）：
+     Layer 1 微信真实地图 → Layer 2 暖纸中和层 → Layer 3 局部透明水墨山体/飞鸟 → Layer 4 Marker/控件/详情卡。
+     不再用一张 page-paper-ink.jpg 盖满整张地图；Marker 去掉白色胶囊，改为圆形照片 + 墨线 + 墨点锚点。 -->
 <view class="map-page">
   <mock-badge />
   <map id="footprintMap" class="map"
@@ -10,25 +11,43 @@
     <cover-view slot="callout">
       <cover-view wx:for="{{markerViews}}" wx:key="recordId" marker-id="{{item.markerId}}"
                   class="marker-callout marker-callout--{{item.side}} {{item.selected ? 'marker-callout--selected' : ''}}">
-        <cover-image wx:if="{{item.photoUrl}}" class="marker-photo" src="{{item.photoUrl}}" />
-        <cover-image wx:else class="marker-photo marker-photo--fallback" src="/assets/icons/marker.png" />
-        <cover-view class="marker-copy">
-          <cover-view class="marker-place">{{item.place}}</cover-view>
-          <cover-view class="marker-meta">{{item.meta}}</cover-view>
+        <cover-view class="marker-card">
+          <cover-image wx:if="{{item.photoUrl}}" class="marker-photo" src="{{item.photoUrl}}" />
+          <cover-image wx:else class="marker-photo marker-photo--fallback" src="/assets/map/marker-fallback.png" />
+          <cover-view class="marker-copy">
+            <cover-view class="marker-place">{{item.place}}</cover-view>
+            <cover-view class="marker-meta">{{item.meta}}</cover-view>
+          </cover-view>
         </cover-view>
+        <!-- 短墨线：向下连接坐标墨点（小墨点 marker-dot 才代表真实坐标） -->
+        <cover-view class="marker-line"></cover-view>
       </cover-view>
     </cover-view>
   </map>
 
-  <image class="map-wash" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
+  <!-- Layer 2：暖纸中和层，压低地图高饱和色但保留道路/城市可读性（§23） -->
+  <view class="map-veil"></view>
 
-  <view class="map-stats">
+  <!-- Layer 3：局部透明水墨，极淡、位于内容后方（§24） -->
+  <image class="map-ink map-ink--left" src="/assets/map/map-left.png" mode="heightFix" />
+  <image class="map-ink map-ink--bottom" src="/assets/map/map-bottom.png" mode="widthFix" />
+  <image class="map-ink map-ink--birds" src="/assets/map/map-birds.png" mode="widthFix" />
+
+  <!-- Layer 4：品牌导航 + 统计信息带 + 控件 + 详情卡 -->
+  <ink-navbar title-image="/assets/titles/map-title.png" />
+
+  <view class="map-stats" style="top: {{statsTop}}px;">
+    <image class="stat-icon" src="/assets/icons/footprint-ink.png" mode="aspectFit" />
     <view class="stat-item"><text>{{footprintCount}} 处足迹</text></view>
     <text class="stat-dot">·</text>
+    <image class="stat-icon" src="/assets/icons/city-ink.png" mode="aspectFit" />
     <view class="stat-item"><text>{{cityCount}} 座城市</text></view>
     <text class="stat-dot">·</text>
+    <image class="stat-icon" src="/assets/icons/location-ink.png" mode="aspectFit" />
     <view class="stat-item stat-recent"><text>最近：{{recentRegion}}</text></view>
-    <button class="route-info" bindtap="onRouteInfoTap">?</button>
+    <button class="route-info" bindtap="onRouteInfoTap" aria-label="足迹连线说明">
+      <image class="route-info__icon" src="/assets/icons/help-ink.png" mode="aspectFit" />
+    </button>
   </view>
 
   <view wx:if="{{empty}}" class="empty-hint">
@@ -40,11 +59,13 @@
     <text class="empty-desc">请稍后再试</text>
   </view>
 
-  <button class="locate-btn {{card ? 'locate-btn--up' : ''}}" bindtap="onLocate" loading="{{locating}}" hover-class="locate-btn--hover">
-    <image class="locate-icon-img" src="/assets/icons/marker.png" mode="aspectFit" />
-    <text class="locate-text">定位我</text>
+  <!-- 定位墨圈（§29：不规则墨圈 + 准星素材，文字仍由 WXML 绘制） -->
+  <button class="locate-btn {{card ? 'locate-btn--up' : ''}}" bindtap="onLocate" loading="{{locating}}" hover-class="locate-btn--hover" aria-label="定位我">
+    <image class="locate-btn__bg" src="/assets/map/locate-ink.png" mode="aspectFit" />
+    <text class="locate-btn__text">定位我</text>
   </button>
 
+  <!-- 底部浮动详情卡（§30：Floating Surface + 轻阴影；§31 查看记录用墨刷按钮） -->
   <view wx:if="{{card}}" class="map-card">
     <image wx:if="{{card.thumb}}" class="card-thumb" src="{{card.thumb}}" mode="aspectFill" />
     <view class="card-body">
@@ -54,7 +75,10 @@
           <text wx:if="{{card.regionText}}" class="card-region">{{card.regionText}}</text>
           <text class="card-meta">{{card.dateText}}　{{card.photoCount}}张照片</text>
         </view>
-        <button class="view-record" bindtap="onCardTap">查看记录</button>
+        <button class="brush-btn view-record" bindtap="onCardTap">
+          <image class="brush-btn__bg" src="/assets/buttons/brush-dark.png" mode="scaleToFill" />
+          <text class="brush-btn__text">查看记录</text>
+        </button>
       </view>
       <view wx:if="{{card.previews.length}}" class="preview-row">
         <image wx:for="{{card.previews}}" wx:key="*this" class="preview-img" src="{{item}}" mode="aspectFill" />

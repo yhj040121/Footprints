@@ -1,21 +1,23 @@
-/* 溪山行旅 全局样式 —— 水墨暖纸色（FR-16 覆盖 desgin.md：仅浅色，不做深色适配）
- * 规则继承 desgin.md：无阴影、圆角、语义变量优先、字号/间距用统一刻度 */
+/* 溪山行旅 全局样式 —— 水墨暖纸色（需求文档 V1.0 §5-§12 视觉系统）
+ * 原则：宣纸、淡墨、留白；页面负责氛围、卡片负责信息、水墨只做三级视觉；
+ * 阴影按 §7.2 允许轻阴影（仅浮层/独立功能入口）；朱砂仅用于小印章/危险动作/少量状态强调 */
 
 page {
-  /* 色板：水墨暖纸色（浅色唯一主题） */
-  --color-bg-page: #F6F2E9;        /* 暖纸底 */
-  --color-bg-surface: #FDFBF5;     /* 卡片/输入框 */
-  --color-bg-subtle: #EFE9DC;      /* 次级区域 */
-  --color-bg-hover: #EAE3D4;       /* 按下/悬停 */
-  --color-text-primary: #35322C;   /* 墨色正文 */
-  --color-text-secondary: #6E685C; /* 次要 */
-  --color-text-muted: #9A937F;     /* 辅助/占位 */
-  --color-text-disabled: #B7AF9E;  /* 禁用 */
-  --color-border-subtle: #E2DACA;  /* 装饰分割线 */
-  --color-border-control: #B4AB97; /* 控件边界 */
-  --color-action-bg: #35322C;      /* 主按钮墨底 */
+  /* 色板：暖纸色体系（§5.1 全局颜色） */
+  --color-bg-page: #F6F2E9;        /* 页面宣纸底 */
+  --color-bg-surface: #FDFBF5;     /* 主卡片暖白 */
+  --color-bg-subtle: #F9F6EE;      /* 次级暖白 */
+  --color-bg-hover: #EFE9DC;       /* 按下/悬停 */
+  --color-text-primary: #302D28;   /* 主文字 */
+  --color-text-secondary: #6E685C; /* 次级文字 */
+  --color-text-muted: #9A937F;     /* 弱提示 */
+  --color-text-disabled: #B7AF9E;  /* 禁用文字 */
+  --color-border-subtle: rgba(90, 80, 64, 0.12); /* 弱边框 */
+  --color-border-control: rgba(90, 80, 64, 0.20); /* 控件边框 */
+  --color-action-bg: #302D28;      /* 主墨按钮 */
   --color-action-pressed: #4A463E;
-  --color-action-text: #F8F4EA;    /* 主按钮文字 */
+  --color-action-text: #F8F4EA;    /* 按钮文字 */
+  --color-accent: #A84737;         /* 朱砂：小印章/删除/少量状态强调，禁止大面积使用 */
   --color-overlay: rgb(0 0 0 / 48%);
 
   /* 字号刻度（rpx 以 375 屏宽为基准换算） */
@@ -35,19 +37,28 @@ page {
   --space-6: 48rpx;
   --space-8: 64rpx;
 
-  /* 圆角 */
+  /* 圆角（§7.1：普通图 14~18 / 卡 24~30 / 统计大卡 30 / 浮动卡 28~32 / 胶囊 999） */
+  --radius-img: 14rpx;
   --radius-sm: 8rpx;
   --radius-md: 16rpx;
+  --radius-card: 26rpx;
   --radius-lg: 24rpx;
+  --radius-xl: 30rpx;
+  --radius-float: 30rpx;
   --radius-full: 9999rpx;
 
-  /* 动效 */
+  /* 阴影（§7.2：只允许轻阴影，用于 TabBar / 浮动详情卡 / 独立功能入口） */
+  --shadow-float: 0 8rpx 28rpx rgba(55, 48, 38, 0.05);
+  --shadow-card: 0 8rpx 28rpx rgba(55, 48, 38, 0.04);
+
+  /* 动效（§45.2：120~240ms，只做轻淡入/切换/选中/按下反馈） */
   --duration-fast: 120ms;
   --duration-normal: 180ms;
   --duration-slow: 240ms;
 
   background: var(--color-bg-page);
   color: var(--color-text-primary);
+  /* §8.1 正文：系统字体；地点名称 Semibold（§8.2 禁止楷体）；书法只用于品牌素材（§8.3） */
   font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   font-size: var(--text-base);
   line-height: 1.5;
@@ -57,15 +68,53 @@ view, text, input, textarea, button, image, scroll-view, swiper {
   box-sizing: border-box;
 }
 
-/* 通用卡片 */
-.fp-card {
-  background: var(--color-bg-surface);
-  border: 1rpx solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: none;
+/* ---------- Surface 体系（§6） ---------- */
+
+/* Paper Surface：普通统计卡/记录卡/表单信息卡 —— 暖白、极弱边、无明显水墨、大量留白 */
+.fp-card,
+.surface-paper {
+  background: rgba(253, 251, 246, 0.92);
+  border: 1rpx solid rgba(85, 76, 63, 0.10);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 
-/* 通用主按钮 */
+/* Ink Surface：我的页功能入口/特殊水墨功能卡 —— 仍以暖白为主，仅边角极淡山水 */
+.surface-ink {
+  position: relative;
+  overflow: hidden;
+  background: rgba(253, 251, 246, 0.94);
+  border: 1rpx solid rgba(85, 76, 63, 0.10);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-float);
+}
+.surface-ink .ink-edge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 180rpx;
+  height: 140rpx;
+  pointer-events: none;
+  opacity: 0.5;
+}
+.surface-ink > view,
+.surface-ink > text,
+.surface-ink > image:not(.ink-edge) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Floating Surface：TabBar / 地图底部详情卡 / 页面底部操作栏 —— 半透明暖白 + 轻柔阴影 */
+.surface-floating {
+  background: rgba(253, 251, 246, 0.94);
+  border: 1rpx solid rgba(85, 76, 63, 0.08);
+  border-radius: var(--radius-float);
+  box-shadow: 0 8rpx 28rpx rgba(55, 48, 38, 0.08);
+}
+
+/* ---------- 按钮 ---------- */
+
+/* 通用主按钮（墨色） */
 .fp-btn-primary {
   display: flex;
   align-items: center;
@@ -103,6 +152,34 @@ view, text, input, textarea, button, image, scroll-view, swiper {
 .fp-btn-plain::after { border: none; }
 .fp-btn-plain.button-hover { background: var(--color-bg-hover); }
 
+/* Brush Action（§6.4）：真实干笔墨块 + WXML 叠字，用于查看记录/重点跳转，不用普通圆角矩形 */
+.brush-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  padding: 0;
+  background: transparent;
+  line-height: 1;
+}
+.brush-btn::after { border: none; }
+.brush-btn__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.brush-btn__text {
+  position: relative;
+  z-index: 1;
+  color: var(--color-action-text);
+  font-size: 24rpx;
+  font-weight: 500;
+  letter-spacing: 2rpx;
+}
+
 /* 标签 chip */
 .fp-chip {
   display: inline-flex;
@@ -131,8 +208,7 @@ view, text, input, textarea, button, image, scroll-view, swiper {
   font-size: var(--text-xs);
 }
 
-/* 水墨山水页背景（S8-R2）：固定铺满，z-index:-1 压在页面纸色之上、内容之下；
-   资产 assets/bg/page-paper-ink.jpg（竖版全局背景）+ card-paper-ink.png（横版卡片背景） */
+/* 页面背景（§12：宣纸纹理 + 极淡水墨；固定铺满，压在纸色之上、内容之下） */
 .page-bg {
   position: fixed;
   left: 0;

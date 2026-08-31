@@ -1,0 +1,8 @@
+<!-- 水墨品牌导航条：透明背景浮在页面上，书法标题素材 + 朱砂印（需求文档 §25） -->
+<view class="ink-navbar" style="padding-top: {{statusBarHeight}}px;">
+  <view class="ink-navbar__row">
+    <image wx:if="{{titleImage}}" class="ink-navbar__title-img" src="{{titleImage}}" mode="heightFix" />
+    <text wx:else class="ink-navbar__title-text">{{title}}</text>
+    <slot></slot>
+  </view>
+</view>

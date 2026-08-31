@@ -86,5 +86,8 @@ Page({
 
   onSettingsClose() {
     this.setData({ showSettings: false });
-  }
+  },
+
+  // 弹层内容区拦截冒泡（catchtap 空实现）
+  noop() {}
 });

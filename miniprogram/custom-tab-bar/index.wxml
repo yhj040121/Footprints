@@ -7,6 +7,8 @@
       wx:for="{{list}}"
       wx:key="pagePath"
       class="tab-item {{index === selected && !item.isCenter ? 'tab-item--active' : ''}}"
+      hover-class="tab-item-hover"
+      hover-stay-time="80"
       data-index="{{index}}"
       bindtap="onTap"
     >

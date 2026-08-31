@@ -37,7 +37,8 @@ Page({
     empty: false,
     mapError: false,
     card: null,
-    locating: false
+    locating: false,
+    statsTop: 72  // 统计信息带 top（px）：状态栏 + 导航行高度
   },
 
   onLoad() {
@@ -46,6 +47,10 @@ Page({
     this._lastMarkerTapAt = 0;
     this._view = null;
     this._skipShowRefresh = true;
+    try {
+      const win = wx.getWindowInfo();
+      this.setData({ statsTop: (win.statusBarHeight || 20) + 56 });
+    } catch (e) { /* 旧基础库保持默认 */ }
     this.loadRecords(false);
   },
 
@@ -62,15 +67,16 @@ Page({
   loadRecords(keepView) {
     db.listWithLocation({ force: true }).then((list) => {
       this._records = list;
+      // Marker：小墨点代表真实坐标（§27.3），地点信息由上方透明 callout 呈现（无白色胶囊）
       const markers = list.map((f, i) => ({
         id: i,
         latitude: f.lat,
         longitude: f.lng,
-        iconPath: '/assets/icons/marker.png',
-        width: 14,
-        height: 14,
+        iconPath: '/assets/map/marker-dot.png',
+        width: 10,
+        height: 10,
         anchor: { x: 0.5, y: 0.5 },
-        customCallout: { display: 'ALWAYS', anchorY: -2 }
+        customCallout: { display: 'ALWAYS', anchorY: 0 }
       }));
       const markerViews = list.map((f, i) => ({
         markerId: i,
@@ -85,7 +91,7 @@ Page({
       const points = list.map((f) => ({ latitude: f.lat, longitude: f.lng }));
       const polyline = points.length >= 2 ? [{
         points,
-        color: '#4E484080',
+        color: '#3F393266',   // 淡墨虚线（§28：视觉优先级低于 Marker 与地点名）
         width: 2,
         dottedLine: true,
         arrowLine: false

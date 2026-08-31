@@ -1,9 +1,10 @@
-<!-- pages/mine/mine.wxml —— 我的 Tab（FR-14） -->
+<!-- pages/mine/mine.wxml —— 我的 Tab（FR-14；视觉按需求文档 §33-§37 重构）
+     Profile 更舒展 / 统计卡纯净无水墨 / 两个独立水墨胶囊功能条 / 正式水墨图标 -->
 <view class="mine">
   <image class="page-bg" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
   <mock-badge />
 
-  <!-- 头像与昵称 -->
+  <!-- 头像与昵称（§34：头像顶部 68~80rpx，尺寸 156~164rpx，昵称 40rpx） -->
   <view class="profile">
     <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" hover-class="none">
       <image wx:if="{{profile.avatarUrl}}" class="avatar" src="{{profile.avatarUrl}}" mode="aspectFit" />
@@ -11,11 +12,11 @@
     </button>
     <input class="nickname" type="nickname" value="{{nickname}}" placeholder="旅人" maxlength="32"
       placeholder-class="nickname-ph" bindblur="onNicknameBlur" bindconfirm="onNicknameBlur" />
-    <view class="fp-hint">轻触头像或昵称可修改</view>
+    <view class="fp-hint profile-hint">轻触头像或昵称可修改</view>
   </view>
 
-  <!-- 统计三项 -->
-  <view class="stats fp-card">
+  <!-- 统计三项（§35：纯净大卡，数字 48~52rpx/600，分割线 1rpx × 72rpx #DCCFBC，卡内无水墨） -->
+  <view class="stats surface-paper">
     <view class="stat">
       <text class="stat-num">{{stats.days}}</text>
       <text class="stat-label">已记录天数</text>
@@ -32,27 +33,27 @@
     </view>
   </view>
 
-  <!-- 功能列表：导出照片 / 关于我们 -->
-  <view class="menu fp-card">
-    <view class="menu-item" hover-class="menu-item--hover" bindtap="onExportTap">
-      <text class="menu-icon">⇊</text>
-      <text class="menu-text">导出照片到相册</text>
-      <text class="menu-arrow">›</text>
-    </view>
-    <view class="menu-line"></view>
-    <view class="menu-item" hover-class="menu-item--hover" bindtap="onSettingsTap">
-      <text class="menu-icon">ⓘ</text>
-      <text class="menu-text">关于我们</text>
-      <text class="menu-arrow">›</text>
-    </view>
+  <!-- 功能入口（§36：两个独立水墨胶囊功能条，间距 28~32rpx，正式水墨图标） -->
+  <view class="entry surface-ink" hover-class="entry--hover" bindtap="onExportTap">
+    <image class="ink-edge" src="/assets/ink/card-edge-right.png" mode="aspectFill" />
+    <image class="entry-icon" src="/assets/icons/export-ink.png" mode="aspectFit" />
+    <text class="entry-text">导出照片到相册</text>
+    <view class="entry-arrow"></view>
+  </view>
+
+  <view class="entry surface-ink" hover-class="entry--hover" bindtap="onSettingsTap">
+    <image class="ink-edge" src="/assets/ink/card-edge-right.png" mode="aspectFill" />
+    <image class="entry-icon" src="/assets/icons/info-ink.png" mode="aspectFit" />
+    <text class="entry-text">关于我们</text>
+    <view class="entry-arrow"></view>
   </view>
 
   <!-- 头像压缩隐藏画布 -->
   <canvas type="2d" id="avatarCanvas" class="hidden-canvas" />
 
-  <!-- 关于我们：平台简介与版本号 -->
+  <!-- 关于我们弹层（§37：暖白纸面、圆角 28rpx、弱边、主按钮墨色、无复杂山水） -->
   <view wx:if="{{showSettings}}" class="mask" bindtap="onSettingsClose">
-    <view class="panel fp-card" catchtap="noop">
+    <view class="panel" catchtap="noop">
       <view class="panel-title">关于我们</view>
       <view class="settings-label">平台简介</view>
       <view class="settings-text">溪山行旅是一款专注于私人旅行足迹记录的小程序，帮助你按时间、日历和地图整理走过的地方与沿途照片。</view>

@@ -1,0 +1,27 @@
+/* 水墨品牌导航条：透明、不拦截手势，仅供品牌标题展示 */
+.ink-navbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.ink-navbar__row {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 24rpx;
+}
+
+.ink-navbar__title-img {
+  height: 72rpx;
+  width: auto;
+}
+
+.ink-navbar__title-text {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}

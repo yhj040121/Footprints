@@ -1,22 +1,26 @@
-<!-- pages/export/export.wxml —— 导出照片（按地点勾选，统一加入相册）
-  - 顶部：地点名称 / 时间范围 / 重置 三个 chip；
-  - 主体：日期分组的时间线，每组下若干「地点」卡（复选框 + 缩略图 + 地点 + 城市 + 张数 + 箭头）；
-  - 底部固定：全选 + 已选 N 张 + 导出(N) 按钮 -->
+<!-- pages/export/export.wxml —— 导出照片（需求文档 §14-§20 重构）
+  - 顶部：图标+动态文字筛选 chip ×2 + 墨圈重置；
+  - 主体：轻时间线日期分组 + 纯净记录卡（复选框/卡片主体/箭头分离点击）；
+  - 底部固定：全选 + 已选 N 张 + 导出(N) -->
 <view class="page">
   <image class="page-bg" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
   <mock-badge />
 
-  <!-- 顶部筛选 -->
+  <!-- 顶部筛选（§16：图标与文字分开，动态 label；地点 270×84 / 时间 250×84 / 重置墨圈 90~96） -->
   <view class="filter">
     <view class="filter-row">
-      <view class="chip-wrap {{filterPlace ? 'chip-wrap--on' : ''}}" hover-class="chip-wrap--hover" bindtap="onPlaceFilterTap">
-        <image class="chip-img chip-img--wide" src="/assets/icons/chip-place.png" mode="heightFix" />
+      <view class="chip {{filterPlace ? 'chip--on' : ''}}" hover-class="chip--hover" bindtap="onPlaceFilterTap">
+        <image class="chip__icon" src="/assets/icons/location-ink.png" mode="aspectFit" />
+        <text class="chip__label">{{placeLabel}}</text>
+        <view class="chip__caret"></view>
       </view>
-      <view class="chip-wrap {{filterRange ? 'chip-wrap--on' : ''}}" hover-class="chip-wrap--hover" bindtap="onRangeFilterTap">
-        <image class="chip-img chip-img--wide" src="/assets/icons/chip-time.png" mode="heightFix" />
+      <view class="chip chip--time {{filterRange ? 'chip--on' : ''}}" hover-class="chip--hover" bindtap="onRangeFilterTap">
+        <image class="chip__icon" src="/assets/icons/calendar-ink.png" mode="aspectFit" />
+        <text class="chip__label">{{rangeLabel}}</text>
+        <view class="chip__caret"></view>
       </view>
-      <view class="chip-wrap chip-wrap--round" hover-class="chip-wrap--hover" bindtap="onResetTap">
-        <image class="chip-img chip-img--round" src="/assets/icons/chip-reset.png" mode="heightFix" />
+      <view class="chip-reset" hover-class="chip--hover" bindtap="onResetTap" aria-label="重置筛选">
+        <image class="chip-reset__icon" src="/assets/icons/reset-ink.png" mode="aspectFit" />
       </view>
     </view>
   </view>
@@ -24,19 +28,19 @@
   <!-- 主体列表 -->
   <scroll-view class="body" scroll-y="true" enhanced="true" show-scrollbar="false">
     <view wx:if="{{loading}}" class="state">
-      <view class="state-icon">⏳</view>
+      <view class="state-ink"><image class="state-ink__img" src="/assets/icons/footprint-ink.png" mode="aspectFit" /></view>
       <view class="state-title">正在加载足迹…</view>
     </view>
 
     <view wx:elif="{{error}}" class="state">
-      <view class="state-icon">☁</view>
+      <image class="state-icon" src="/assets/icons/info-ink.png" mode="aspectFit" />
       <view class="state-title">网络不可用</view>
       <view class="state-desc">请检查网络后重试</view>
       <button class="fp-btn-primary state-btn" bindtap="onRetryTap">重试</button>
     </view>
 
     <view wx:elif="{{groups.length === 0}}" class="state">
-      <view class="state-icon">⌧</view>
+      <image class="state-icon" src="/assets/icons/footprint-ink.png" mode="aspectFit" />
       <view class="state-title">没有可导出的照片</view>
       <view class="state-desc">该筛选范围内还没有带照片的足迹</view>
     </view>
@@ -44,18 +48,16 @@
     <view wx:else class="groups">
       <view class="group" wx:for="{{groups}}" wx:key="date" wx:for-item="group">
         <view class="group-side">
-          <view class="track">
-            <view class="dot"></view>
-          </view>
+          <view class="track"><view class="dot"></view></view>
         </view>
         <view class="group-main">
+          <!-- 日期（§17.2：30rpx / 400 / #766F63，与卡片间距 ≥24rpx） -->
           <view class="date">{{group.dateText}}</view>
-          <view class="item fp-card" wx:for="{{group.items}}" wx:key="id" wx:for-item="it"
-            hover-class="item--hover" bindtap="onItemToggle" data-id="{{it.id}}">
-            <image class="item-bg" src="/assets/bg/card-paper-ink.png" mode="scaleToFill" />
-            <view class="check">
+          <!-- 记录卡（§18：干净信息区，不铺山水；点击卡片主体/箭头进详情，复选框负责勾选 §19） -->
+          <view class="item" hover-class="item--hover" bindtap="onItemDetail" data-id="{{it.sourceId}}">
+            <view class="check" catchtap="onItemToggle" data-id="{{it.id}}">
               <view class="check-box {{it.selected ? 'check-box--on' : ''}}">
-                <text wx:if="{{it.selected}}" class="check-tick">✓</text>
+                <view wx:if="{{it.selected}}" class="check-tick"></view>
               </view>
             </view>
             <view class="thumb-wrap">
@@ -65,24 +67,25 @@
             <view class="info">
               <view class="place">{{it.place}}</view>
               <view wx:if="{{it.city}}" class="city">
-                <text class="city-icon">⌖</text>
+                <image class="city-icon" src="/assets/icons/city-ink.png" mode="aspectFit" />
                 <text>{{it.city}}</text>
               </view>
-              <view class="count">{{it.photoCount}} 张照片</view>
+              <view class="count">{{it.photoCount}}张照片</view>
             </view>
-            <view class="arrow">›</view>
+            <view class="arrow" catchtap="onItemDetail" data-id="{{it.sourceId}}"></view>
           </view>
         </view>
       </view>
+      <view class="list-end-space"></view>
     </view>
   </scroll-view>
 
-  <!-- 底部操作条 -->
+  <!-- 底部操作条（§20：高 132rpx+safe-area，rgba(253,251,246,.95)，轻层次无分割线） -->
   <view class="bar">
     <view class="bar-inner">
       <view class="select-all" hover-class="select-all--hover" bindtap="onSelectAllTap">
         <view class="check-box {{allSelected ? 'check-box--on' : ''}}">
-          <text wx:if="{{allSelected}}" class="check-tick">✓</text>
+          <view wx:if="{{allSelected}}" class="check-tick"></view>
         </view>
         <text class="select-all-text">全选</text>
       </view>
@@ -95,7 +98,7 @@
 
   <!-- 导出进度 -->
   <view wx:if="{{exporting}}" class="mask">
-    <view class="panel fp-card" catchtap="noop">
+    <view class="panel" catchtap="noop">
       <view class="panel-title">正在导出照片</view>
       <view class="progress-num">{{exportDone}} / {{exportTotal}}</view>
       <view class="progress-track">
@@ -107,7 +110,7 @@
 
   <!-- 自定义日期范围 -->
   <view wx:if="{{showRangePanel}}" class="mask" bindtap="onRangeCancel">
-    <view class="panel fp-card" catchtap="noop">
+    <view class="panel" catchtap="noop">
       <view class="panel-title">选择日期范围</view>
       <picker mode="date" value="{{rangeStart}}" end="{{todayStr}}" bindchange="onRangeStartChange">
         <view class="picker-row">

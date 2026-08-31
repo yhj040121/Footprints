@@ -1,52 +1,108 @@
-/* pages/export/export.wxss —— 导出照片
-   顶 chip 筛选 → 时间线分组 → 复选地点卡 → 底固定操作条 → 进度/范围弹层 */
+/* pages/export/export.wxss —— 导出照片（需求文档 §14-§20）
+   水墨筛选 chip → 轻时间线 → 纯净记录卡 → 底固定操作条 → 进度/范围弹层 */
 
 .page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(170rpx + env(safe-area-inset-bottom));
 }
 
-/* ---------- 筛选 chip ---------- */
+/* ---------- 筛选 chip（§16：暖白 + 1rpx 弱边 + 底部一小段淡墨山体，控件间距 16~18rpx，页面左右边距 32rpx） ---------- */
 .filter {
   padding: var(--space-3) var(--space-4) var(--space-2);
 }
 .filter-row {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 18rpx;
 }
-/* chip 容器：仅负责点击 + 高亮态；图片自带水墨背景与圆角 */
-.chip-wrap {
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
+.chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
+  gap: 10rpx;
+  width: 270rpx;
+  min-height: 84rpx;
+  padding: 0 20rpx;
+  border-radius: var(--radius-full);
+  background: rgba(253, 251, 246, 0.9);
+  border: 1rpx solid var(--color-border-subtle);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.chip--time { width: 250rpx; }
+.chip--hover { opacity: 0.8; }
+.chip--on {
+  background: var(--color-action-bg);
+  border-color: var(--color-action-bg);
+}
+.chip--on .chip__label,
+.chip--on .chip__caret::before {
+  color: var(--color-action-text);
+  border-color: var(--color-action-text);
+}
+.chip--on .chip__icon { opacity: 0.9; }
+/* chip 底部一小段淡墨山体（不整块铺山，§16.2） */
+.chip::after {
+  content: "";
+  position: absolute;
+  right: -6rpx;
+  bottom: -4rpx;
+  width: 120rpx;
+  height: 44rpx;
+  background: url("/assets/ink/card-edge-right.png") no-repeat right bottom / contain;
+  opacity: 0.42;
+  pointer-events: none;
+}
+.chip__icon {
+  width: 36rpx;
+  height: 36rpx;
+  flex-shrink: 0;
+}
+.chip__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 25rpx;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* CSS 绘制下拉箭头（替代 Unicode ˅） */
+.chip__caret {
+  position: relative;
+  width: 16rpx;
+  height: 16rpx;
+  flex-shrink: 0;
+}
+.chip__caret::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 11rpx;
+  height: 11rpx;
+  border-right: 2.5rpx solid #8F8875;
+  border-bottom: 2.5rpx solid #8F8875;
+  transform: translate(-50%, -68%) rotate(45deg);
+  border-radius: 1rpx;
+}
+/* 墨圈重置（§16.1：90~96rpx 圆形） */
+.chip-reset {
+  margin-left: auto;
+  width: 92rpx;
+  height: 92rpx;
+  padding: 0;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  min-height: 88rpx;          /* 触控目标 ≥88rpx */
-  cursor: pointer;
+  border-radius: var(--radius-full);
+  background: transparent;
 }
-.chip-wrap--round {
-  min-height: 0;
-}
-.chip-wrap--hover { transform: translateY(2rpx); }
-.chip-wrap--on .chip-img {
-  filter: brightness(0.86) saturate(0.85);
-}
-/* 图片本身：height 决定显示高度，width 自动按比例 */
-.chip-img {
-  display: block;
-  height: 80rpx;
-  width: auto;
-}
-.chip-img--wide {
-  /* 占位：横长 chip 占 240rpx 宽左右，实际由 heightFix 按比例算 */
-}
-.chip-img--round {
-  height: 100rpx;
+.chip-reset__icon {
+  width: 92rpx;
+  height: 92rpx;
 }
 
 /* ---------- 主体 ---------- */
@@ -54,7 +110,7 @@
   flex: 1;
   min-height: 400rpx;
   /* flex item 内的 scroll-view 需要显式高度：否则部分机型高度坍塌 */
-  height: calc(100vh - 220rpx);
+  height: calc(100vh - 240rpx);
 }
 
 .state {
@@ -64,7 +120,12 @@
   padding-top: 160rpx;
   gap: var(--space-2);
 }
-.state-icon { font-size: 72rpx; color: var(--color-text-muted); }
+.state-icon,
+.state-ink__img {
+  width: 96rpx;
+  height: 96rpx;
+  opacity: 0.55;
+}
 .state-title {
   font-size: var(--text-lg);
   color: var(--color-text-primary);
@@ -79,7 +140,7 @@
   width: 320rpx;
 }
 
-/* ---------- 分组 / 时间线 ---------- */
+/* ---------- 时间线（§17：线 1rpx rgba(76,70,61,.20)、节点 12rpx #928B79） ---------- */
 .groups { padding: 0 var(--space-4); }
 
 .group {
@@ -88,75 +149,71 @@
   margin-bottom: var(--space-4);
 }
 .group-side {
-  width: 56rpx;
+  width: 48rpx;
   flex-shrink: 0;
 }
 .track {
   position: relative;
-  width: 2rpx;
+  width: 1rpx;
   height: 100%;
   margin: 0 auto;
-  background: rgb(92 84 71 / 18%);
+  background: rgba(76, 70, 61, 0.20);
 }
 .dot {
   position: absolute;
-  top: 28rpx;
+  top: 34rpx;
   left: 50%;
   transform: translateX(-50%);
   width: 12rpx;
   height: 12rpx;
   border-radius: var(--radius-full);
-  background: #8F8777;
-  box-shadow: 0 0 0 5rpx rgb(246 242 233 / 72%);
+  background: #928B79;
+  box-shadow: 0 0 0 6rpx rgba(246, 242, 233, 0.85);
 }
 .group-main {
   flex: 1;
   min-width: 0;
 }
+/* 日期：30rpx / 400 / #766F63；与卡片间距 ≥24rpx（§17.2） */
 .date {
-  margin: 8rpx 0 var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-  font-weight: 500;
+  margin: 10rpx 0 26rpx;
+  font-size: 30rpx;
+  font-weight: 400;
+  color: #766F63;
+  line-height: 1.3;
 }
 
-/* ---------- 地点卡 ---------- */
+/* ---------- 记录卡（§18：高 180~190rpx、圆角 26rpx、内边距 22~24rpx、不铺山水） ---------- */
 .item {
   position: relative;
   display: flex;
   align-items: center;
-  padding: var(--space-3);
+  min-height: 184rpx;
+  padding: 22rpx;
   margin-bottom: var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-surface);
+  border-radius: var(--radius-card);
+  background: rgba(253, 251, 246, 0.88);
   border: 1rpx solid var(--color-border-subtle);
-  overflow: hidden;            /* 让绝对定位的背景图按圆角裁切 */
+  box-shadow: var(--shadow-card);
+  transition: background var(--duration-fast);
 }
-.item--hover { background: var(--color-bg-hover); }
-/* 横版水墨底图（与 footprint-card 复用同一张 asset） */
-.item-bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  pointer-events: none;
-}
-.item > view { position: relative; z-index: 1; }
+.item--hover { background: rgba(240, 234, 222, 0.92); }
+
+/* 复选框 34×34rpx（§18.2） */
 .check {
   width: 56rpx;
   height: 56rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: var(--space-3);
+  margin-right: 14rpx;
   flex-shrink: 0;
 }
 .check-box {
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: var(--radius-sm);
-  border: 1rpx solid var(--color-border-control);
+  width: 34rpx;
+  height: 34rpx;
+  border-radius: 6rpx;
+  border: 2rpx solid var(--color-border-control);
   background: var(--color-bg-surface);
   display: flex;
   align-items: center;
@@ -166,21 +223,37 @@
   background: var(--color-action-bg);
   border-color: var(--color-action-bg);
 }
+/* CSS 绘制对勾（替代 Unicode ✓） */
 .check-tick {
-  color: var(--color-action-text);
-  font-size: 24rpx;
-  line-height: 1;
+  position: relative;
+  width: 18rpx;
+  height: 10rpx;
 }
+.check-tick::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  border-left: 3rpx solid var(--color-action-text);
+  border-bottom: 3rpx solid var(--color-action-text);
+  transform: rotate(-48deg) scale(0.82);
+  transform-origin: center;
+  border-radius: 1rpx;
+}
+
+/* 照片 132~136rpx、圆角 14rpx */
 .thumb-wrap {
-  width: 120rpx;
-  height: 120rpx;
+  width: 132rpx;
+  height: 132rpx;
   margin-right: var(--space-3);
   flex-shrink: 0;
 }
 .thumb {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: var(--radius-md);
+  width: 132rpx;
+  height: 132rpx;
+  border-radius: var(--radius-img);
   background: var(--color-bg-subtle);
   display: block;
 }
@@ -190,18 +263,21 @@
   justify-content: center;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+  border: 1rpx dashed var(--color-border-control);
 }
+
 .info {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
+  gap: 8rpx;
 }
+/* 地点 32rpx / 600（§18.2），系统字体 Semibold（§8.2） */
 .place {
   font-size: var(--text-base);
   color: var(--color-text-primary);
-  font-weight: 500;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -209,43 +285,62 @@
 .city {
   display: flex;
   align-items: center;
-  gap: 6rpx;
-  font-size: var(--text-sm);
+  gap: 8rpx;
+  font-size: 26rpx;
   color: var(--color-text-secondary);
 }
 .city-icon {
-  font-size: 22rpx;
-  color: var(--color-text-muted);
+  width: 28rpx;
+  height: 28rpx;
+  opacity: 0.75;
 }
 .count {
-  font-size: var(--text-xs);
+  font-size: 24rpx;
   color: var(--color-text-muted);
 }
+/* CSS 绘制右箭头（替代 Unicode ›） */
 .arrow {
-  font-size: 40rpx;
-  color: var(--color-text-muted);
-  margin-left: var(--space-3);
-  line-height: 1;
+  position: relative;
+  width: 40rpx;
+  height: 40rpx;
+  margin-left: var(--space-2);
+  flex-shrink: 0;
+}
+.arrow::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16rpx;
+  height: 16rpx;
+  border-top: 3rpx solid var(--color-text-muted);
+  border-right: 3rpx solid var(--color-text-muted);
+  transform: translate(-62%, -50%) rotate(45deg);
+  border-radius: 1rpx;
 }
 
-/* ---------- 底操作条 ---------- */
+.list-end-space { height: var(--space-4); }
+
+/* ---------- 底操作条（§20：高 132rpx+safe-area，rgba(253,251,246,.95)，轻层次无分割线） ---------- */
 .bar {
   position: fixed;
   left: 0; right: 0; bottom: 0;
-  background: var(--color-bg-surface);
-  border-top: 1rpx solid var(--color-border-subtle);
+  background: rgba(253, 251, 246, 0.95);
+  /* 非常轻的顶部层次，不用明显分割线（§20.1） */
+  box-shadow: 0 -1rpx 0 rgba(90, 80, 64, 0.06), 0 -8rpx 24rpx rgba(55, 48, 38, 0.04);
   z-index: 50;
 }
 .bar-inner {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 16rpx var(--space-4);
+  height: 132rpx;
+  padding: 0 var(--space-4);
 }
 .select-all {
   display: inline-flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 14rpx;
 }
 .select-all--hover { opacity: 0.7; }
 .select-all-text {
@@ -258,27 +353,28 @@
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
+/* 导出按钮（§20.2：启用 #302D28/#F8F4EA，禁用 #F2EFE8/#C2BDB2） */
 .export-btn {
   min-width: 200rpx;
-  height: 72rpx;
-  line-height: 72rpx;
-  padding: 0 32rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  padding: 0 36rpx;
   border-radius: var(--radius-full);
-  background: var(--color-action-bg);
-  color: var(--color-action-text);
+  background: #302D28;
+  color: #F8F4EA;
   font-size: var(--text-sm);
   font-weight: 500;
 }
 .export-btn::after { border: none; }
 .export-btn--disabled {
-  background: var(--color-bg-hover);
-  color: var(--color-text-disabled);
+  background: #F2EFE8;
+  color: #C2BDB2;
 }
 .safe-bottom {
   height: env(safe-area-inset-bottom);
 }
 
-/* ---------- 弹层（进度、范围选择） ---------- */
+/* ---------- 弹层（进度、范围选择；圆角 28rpx 暖白纸面） ---------- */
 .mask {
   position: fixed;
   inset: 0;
@@ -291,6 +387,10 @@
 .panel {
   width: 620rpx;
   padding: var(--space-5) var(--space-4) var(--space-4);
+  background: rgba(253, 251, 246, 0.98);
+  border: 1rpx solid var(--color-border-subtle);
+  border-radius: 28rpx;
+  box-shadow: 0 8rpx 28rpx rgba(55, 48, 38, 0.08);
 }
 .panel-title {
   margin-bottom: var(--space-4);
@@ -305,7 +405,7 @@
   min-height: 88rpx;
   margin-bottom: var(--space-3);
   padding: 0 var(--space-3);
-  background: var(--color-bg-page);
+  background: var(--color-bg-subtle);
   border: 1rpx solid var(--color-border-subtle);
   border-radius: var(--radius-md);
 }

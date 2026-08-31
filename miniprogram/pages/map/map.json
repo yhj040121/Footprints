@@ -1,6 +1,7 @@
 {
-  "navigationBarTitleText": "足迹地图",
+  "navigationStyle": "custom",
   "usingComponents": {
-    "mock-badge": "/components/mock-badge/index"
+    "mock-badge": "/components/mock-badge/index",
+    "ink-navbar": "/components/ink-navbar/index"
   }
 }
