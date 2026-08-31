@@ -54,15 +54,19 @@
           <!-- 日期（§17.2：30rpx / 400 / #766F63，与卡片间距 ≥24rpx） -->
           <view class="date">{{group.dateText}}</view>
           <!-- 记录卡（§18：干净信息区，不铺山水；点击卡片主体/箭头进详情，复选框负责勾选 §19） -->
-          <view class="item" hover-class="item--hover" bindtap="onItemDetail" data-id="{{it.sourceId}}">
+          <view wx:for="{{group.items}}" wx:key="id" wx:for-item="it"
+                class="item {{it.selected ? 'item--selected' : ''}}"
+                hover-class="item--hover" bindtap="onItemDetail" data-id="{{it.sourceId}}">
             <view class="check" catchtap="onItemToggle" data-id="{{it.id}}">
               <view class="check-box {{it.selected ? 'check-box--on' : ''}}">
                 <view wx:if="{{it.selected}}" class="check-tick"></view>
               </view>
             </view>
-            <view class="thumb-wrap">
-              <image wx:if="{{it.coverUrl}}" class="thumb" src="{{it.coverUrl}}" mode="aspectFill" lazy-load="true" />
-              <view wx:else class="thumb thumb--empty">无图</view>
+            <view class="thumb-wrap" catchtap="onPreviewItem" data-id="{{it.id}}">
+              <image wx:if="{{it.coverUrl}}" class="thumb" src="{{it.coverUrl}}" mode="aspectFill" lazy-load="true"
+                data-id="{{it.id}}" binderror="onCoverError" />
+              <view wx:else class="thumb thumb--empty">{{it.coverFailed ? '加载失败' : '加载中'}}</view>
+              <view wx:if="{{it.photoCount > 1}}" class="thumb-count">{{it.photoCount}}</view>
             </view>
             <view class="info">
               <view class="place">{{it.place}}</view>

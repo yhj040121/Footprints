@@ -1,22 +1,57 @@
-/* 水墨品牌导航条：透明、不拦截手势，仅供品牌标题展示 */
+/* 水墨品牌导航条：暖纸渐隐，标题严格居中，不与右上角微信胶囊争抢空间。 */
 .ink-navbar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   z-index: 60;
-  pointer-events: none;
+  background: linear-gradient(180deg, rgba(248, 245, 237, 0.98) 0%, rgba(248, 245, 237, 0.88) 76%, rgba(248, 245, 237, 0) 100%);
 }
 
 .ink-navbar__row {
+  position: relative;
   display: flex;
   align-items: center;
   height: 44px;
-  padding: 0 24rpx;
+  padding: 0 180rpx 0 24rpx;
+}
+
+.ink-navbar__back {
+  position: relative;
+  z-index: 2;
+  width: 72rpx;
+  height: 72rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.ink-navbar__back::after { border: 0; }
+.ink-navbar__back-mark {
+  position: absolute;
+  left: 18rpx;
+  top: 50%;
+  width: 26rpx;
+  height: 26rpx;
+  border-left: 4rpx solid #302D28;
+  border-bottom: 4rpx solid #302D28;
+  border-radius: 2rpx;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.ink-navbar__title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
 
 .ink-navbar__title-img {
-  height: 72rpx;
+  height: 66rpx;
   width: auto;
 }
 

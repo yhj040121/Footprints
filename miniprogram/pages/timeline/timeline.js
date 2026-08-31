@@ -8,6 +8,7 @@ const request = require('../../utils/request');
 const db = require('../../utils/db');
 const drafts = require('../../utils/drafts');
 const contentCache = require('../../utils/content-cache');
+const pendingDeletions = require('../../utils/pending-deletions');
 
 const STALE_DRAFT_MS = 90 * 1000;
 
@@ -32,6 +33,7 @@ Page({
   onLoad() {
     this._loadedOnce = false;
     this._coverCache = {};
+    this._cloudSkip = 0;
     this.loadFirst();
   },
 
@@ -50,10 +52,11 @@ Page({
     const d = this.data;
     if (d.loading || d.loadingMore || !d.hasMore || d.loginError) return;
     this.setData({ loadingMore: true });
-    const cloudCount = d.list.filter((it) => !it.isDraft).length;
-    db.listFootprintsPage(cloudCount, constants.PAGE_SIZE)
+    const cloudSkip = this._cloudSkip || d.list.filter((it) => !it.isDraft).length;
+    db.listFootprintsPage(cloudSkip, constants.PAGE_SIZE)
       .then((res) => {
-        const added = this.attachEditDrafts(this.decorateList(res.list));
+        this._cloudSkip = cloudSkip + (res.list || []).length;
+        const added = this.attachEditDrafts(this.decorateList(pendingDeletions.filter(res.list)));
         const base = d.list.filter((it) => !it.isDraft);
         const list = applyGrouping(base.concat(added));
         this.setData({ list, hasMore: res.hasMore, loadingMore: false });
@@ -74,7 +77,8 @@ Page({
         return db.listFootprintsPage(0, constants.PAGE_SIZE, options);
       })
       .then((res) => {
-        const list = this.mergeDrafts(this.attachEditDrafts(this.decorateList(res.list)));
+        this._cloudSkip = (res.list || []).length;
+        const list = this.mergeDrafts(this.attachEditDrafts(this.decorateList(pendingDeletions.filter(res.list))));
         this._loadedOnce = true;
         this.setData({ list, hasMore: res.hasMore, loading: false });
         this.signCovers(list.filter((it) => !it.isDraft));

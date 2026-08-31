@@ -8,6 +8,7 @@ const store = require('./mock/store');
 const seed = require('./mock/seed');
 const dateUtil = require('./date');
 const contentCache = require('./content-cache');
+const pendingDeletions = require('./pending-deletions');
 
 const COLLECTION = 'footprint';
 const USER_COLLECTION = 'user';
@@ -101,7 +102,7 @@ function listByRange(startDate, endDate, options) {
         return res.data.length === 20 ? step() : all;
       });
     return step();
-  });
+  }).then((list) => pendingDeletions.filter(list));
 }
 
 // 地图：全部含经纬度的记录（客户端 SDK 单次上限 20 条，循环分页，契约 §2.3）
@@ -133,7 +134,7 @@ function listWithLocation(options) {
     return step().then((list) =>
       list.filter((f) => typeof f.lat === 'number' && typeof f.lng === 'number')
     );
-  });
+  }).then((list) => pendingDeletions.filter(list));
 }
 
 // 详情：按 id 取单条（S7-R1：doc().get() 在自定义规则下不满足子集检查，改 where({_id, _openid})）
@@ -162,7 +163,7 @@ function stats(options) {
   return readThrough('stats', options, () => {
     if (config.USE_MOCK) {
       ensureMockSeed();
-      const all = store.getFootprints();
+      const all = pendingDeletions.filter(store.getFootprints());
       const days = {};
       let photos = 0;
       all.forEach((f) => {
@@ -184,13 +185,14 @@ function stats(options) {
         return res.data.length === 20 ? step() : all;
       });
     return step().then(() => {
+      const visible = pendingDeletions.filter(all);
       const days = {};
       let photos = 0;
-      all.forEach((f) => {
+      visible.forEach((f) => {
         days[f.date] = true;
         photos += (f.photos || []).length;
       });
-      return { days: Object.keys(days).length, footprints: all.length, photos };
+      return { days: Object.keys(days).length, footprints: visible.length, photos };
     });
   });
 }

@@ -7,6 +7,30 @@ const constants = require('../../utils/constants');
 const dateUtil = require('../../utils/date');
 const contentCache = require('../../utils/content-cache');
 const drafts = require('../../utils/drafts');
+const pendingDeletions = require('../../utils/pending-deletions');
+
+// 乐观删除状态变化后刷新仍在页面栈中的数据页；不在栈中的页面由各自 onShow 兜底。
+function refreshDataPages() {
+  try {
+    const pages = getCurrentPages() || [];
+    pages.forEach((page) => {
+      if (!page) return;
+      if (page.route === 'pages/timeline/timeline' && typeof page.loadFirst === 'function') {
+        page.loadFirst({ force: true });
+      } else if (page.route === 'pages/calendar/calendar' && typeof page._loadMonth === 'function') {
+        const ym = page._ym();
+        if (page._cache) delete page._cache[ym];
+        page._loadMonth(ym);
+      } else if (page.route === 'pages/map/map' && typeof page.loadRecords === 'function') {
+        page.loadRecords(true);
+      } else if (page.route === 'pages/export/export' && typeof page.load === 'function') {
+        page.load({ force: true });
+      } else if (page.route === 'pages/mine/mine' && typeof page.refresh === 'function') {
+        page.refresh();
+      }
+    });
+  } catch (e) { /* 页面栈不可用时由 onShow 重新拉取 */ }
+}
 
 Page({
   data: {
@@ -178,53 +202,55 @@ Page({
     });
   },
 
-  // §5.4（S6-R4 细化）删除传输异常终态：无应答重发同一 delFootprint 至明确终态（幂等安全）；
-  // 1004 = 已删除成功按成功展示；3001/9000 可继续重试；重试耗尽（3 次，间隔 2s）仍无终态 → 回读记录：
-  // 不存在 = 删除成功；存在或回读失败 = 提示「结果未确认」+「再试一次」，不得显示「删除失败」
+  // 乐观删除：交互立即完成，delFootprint 两阶段删除在后台推进；失败时再恢复记录。
+  // 1004 视为成功；3001/9000/传输异常后台重试，传输终态不明时强制回读裁定。
   doDelete() {
+    if (this._deleteStarted) return;
+    this._deleteStarted = true;
+    const footprintId = this.fpId;
     this.setData({ deleting: true });
-    wx.showLoading({ title: '删除中', mask: true });
-    const finish = () => { wx.hideLoading(); this.setData({ deleting: false }); };
+    pendingDeletions.mark(footprintId);
+    db.invalidateFootprintsCache();
+    refreshDataPages();
+    wx.showToast({ title: '已删除', icon: 'success' });
+    setTimeout(() => wx.navigateBack(), 360);
+
+    let settled = false;
     const success = () => {
-      finish();
+      if (settled) return;
+      settled = true;
+      pendingDeletions.clear(footprintId);
       db.invalidateFootprintsCache();
-      wx.showToast({ title: '已删除', icon: 'success' });
-      setTimeout(() => wx.navigateBack(), 600);
+      refreshDataPages();
     };
-    const unconfirmed = () => {
-      finish();
-      wx.showModal({
-        title: '结果未确认',
-        content: '删除结果未确认，请再试一次',
-        confirmText: '再试一次',
-        cancelText: '取消',
-        success: (r) => { if (r.confirm) this.doDelete(); }
-      });
+    const restore = () => {
+      if (settled) return;
+      settled = true;
+      pendingDeletions.clear(footprintId);
+      db.invalidateFootprintsCache();
+      refreshDataPages();
+      wx.showToast({ title: '删除未完成，记录已恢复', icon: 'none', duration: 4000 });
     };
-    // 回读裁定：记录已不在 = 删除成功；仍在或回读也失败 = 结果未确认
+    // 回读裁定：记录已不在 = 删除成功；仍在或回读失败 = 解除乐观隐藏并恢复。
     const reRead = () => {
-      db.getFootprint(this.fpId, { force: true })
-        .then((fp) => (fp ? unconfirmed() : success()))
-        .catch(() => unconfirmed());
+      db.getFootprint(footprintId, { force: true })
+        .then((fp) => (fp ? restore() : success()))
+        .catch(restore);
     };
     const send = (retriesLeft) => {
-      request.callFunction('delFootprint', { footprintId: this.fpId })
+      request.callFunction('delFootprint', { footprintId })
         .then(success)
         .catch((err) => {
-          if (request.isNotFound(err)) return success(); // 1004：已删除成功（契约 §0.3 / §5.4）
-          if (err && err.transport && retriesLeft > 0) { // 无应答：重发到终态（间隔 2s，最多 3 次）
-            setTimeout(() => send(retriesLeft - 1), 2000);
+          if (request.isNotFound(err)) return success();
+          if ((request.isTransport(err) || request.isRetryable(err)) && retriesLeft > 0) {
+            setTimeout(() => send(retriesLeft - 1), 1500);
             return;
           }
-          if (err && err.transport) return reRead(); // 重试耗尽仍无终态 → 回读裁定
-          // 服务端明确拒绝（3001/9000 可重试 / 1001/1003 拒绝）
-          finish();
-          let tip = (err && err.message) || '删除失败';
-          if (!(err && err.transport) && request.isRetryable(err)) tip += '，可重试';
-          wx.showToast({ title: tip, icon: 'none' });
+          if (request.isTransport(err)) return reRead();
+          restore();
         });
     };
-    send(3); // 初始 1 次 + 至多 3 次重试（每次间隔 2s）
+    send(3);
   },
 
   onBack() {

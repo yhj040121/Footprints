@@ -198,6 +198,11 @@
   transition: background var(--duration-fast);
 }
 .item--hover { background: rgba(240, 234, 222, 0.92); }
+.item--selected {
+  border-color: rgba(48, 45, 40, 0.30);
+  background: rgba(249, 246, 238, 0.97);
+  box-shadow: inset 5rpx 0 0 rgba(48, 45, 40, 0.78), var(--shadow-card);
+}
 
 /* 复选框 34×34rpx（§18.2） */
 .check {
@@ -245,6 +250,7 @@
 
 /* 照片 132~136rpx、圆角 14rpx */
 .thumb-wrap {
+  position: relative;
   width: 132rpx;
   height: 132rpx;
   margin-right: var(--space-3);
@@ -264,6 +270,22 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   border: 1rpx dashed var(--color-border-control);
+}
+.thumb-count {
+  position: absolute;
+  right: 8rpx;
+  bottom: 8rpx;
+  min-width: 34rpx;
+  height: 34rpx;
+  padding: 0 9rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: rgba(48, 45, 40, 0.78);
+  color: #F8F4EA;
+  font-size: 20rpx;
+  line-height: 1;
 }
 
 .info {

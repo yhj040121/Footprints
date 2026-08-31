@@ -9,6 +9,7 @@ const DEFAULT_CENTER = { latitude: 30.75, longitude: 120.75 };
 const DEFAULT_SCALE = 9;
 const LOCATE_SCALE = 13;
 const MARKER_TAP_GUARD_MS = 300;
+const SIGN_BATCH = 100;
 
 function shortDate(date) {
   return (date || '').slice(5).replace('-', '.');
@@ -46,6 +47,7 @@ Page({
     this._thumbCache = {};
     this._lastMarkerTapAt = 0;
     this._view = null;
+    this._loadVersion = 0;
     this._skipShowRefresh = true;
     try {
       const win = wx.getWindowInfo();
@@ -65,8 +67,12 @@ Page({
   },
 
   loadRecords(keepView) {
+    const version = ++this._loadVersion;
     db.listWithLocation({ force: true }).then((list) => {
+      if (version !== this._loadVersion) return;
       this._records = list;
+      const selectedId = keepView && this.data.card ? this.data.card.id : '';
+      const selectedIndex = selectedId ? list.findIndex((f) => f._id === selectedId) : -1;
       // Marker：小墨点代表真实坐标（§27.3），地点信息由上方透明 callout 呈现（无白色胶囊）
       const markers = list.map((f, i) => ({
         id: i,
@@ -86,7 +92,7 @@ Page({
         photoUrl: '',
         hasPhoto: !!((f.photos || [])[0] && (f.photos || [])[0].key),
         side: i % 2 ? 'left' : 'right',
-        selected: false
+        selected: i === selectedIndex
       }));
       const points = list.map((f) => ({ latitude: f.lat, longitude: f.lng }));
       const polyline = points.length >= 2 ? [{
@@ -128,9 +134,15 @@ Page({
         patch.longitude = latest ? latest.lng : DEFAULT_CENTER.longitude;
         patch.scale = DEFAULT_SCALE;
       }
-      this.setData(patch);
-      this.loadMarkerThumbs(list);
+      const focusIndex = selectedIndex >= 0 ? selectedIndex : (!keepView && list.length ? list.length - 1 : -1);
+      this.setData(patch, () => {
+        if (version !== this._loadVersion) return;
+        this.loadMarkerThumbs(list, version);
+        // 初次进入默认选中最近一条，参考稿中的照片墨钉与底部详情卡立即形成联动。
+        if (focusIndex >= 0) this.selectMarker(focusIndex);
+      });
     }).catch((err) => {
+      if (version !== this._loadVersion) return;
       this.setData({ mapError: true });
       wx.showToast({ title: (err && err.message) || '地图暂时没有加载出来', icon: 'none' });
     });
@@ -147,7 +159,7 @@ Page({
     return span > 5 ? points.slice(-5) : points;
   },
 
-  loadMarkerThumbs(list) {
+  loadMarkerThumbs(list, version) {
     const need = [];
     const byKey = {};
     list.forEach((f) => {
@@ -160,25 +172,32 @@ Page({
         need.push(first.key);
       }
     });
-    this.applyMarkerThumbs(byKey);
+    this.applyMarkerThumbs(byKey, list, version);
     if (!need.length) return;
-    request.callFunction('ossSts', {
-      action: 'sign',
-      items: need.map((key) => ({ key, process: constants.PROCESS_THUMB }))
-    }).then((data) => {
-      const items = (data && data.urls) || [];
+    const tasks = [];
+    for (let i = 0; i < need.length; i += SIGN_BATCH) {
+      tasks.push(request.callFunction('ossSts', {
+        action: 'sign',
+        items: need.slice(i, i + SIGN_BATCH).map((key) => ({ key, process: constants.PROCESS_THUMB }))
+      }));
+    }
+    Promise.all(tasks).then((results) => {
+      if (version !== this._loadVersion) return;
+      const items = [];
+      results.forEach((data) => items.push.apply(items, (data && data.urls) || []));
       contentCache.setSignedMany(constants.PROCESS_THUMB, items);
       items.forEach((item) => {
         this._thumbCache[item.key] = item;
         byKey[item.key] = item.url;
       });
-      this.applyMarkerThumbs(byKey);
+      this.applyMarkerThumbs(byKey, list, version);
     }).catch(() => {});
   },
 
-  applyMarkerThumbs(byKey) {
+  applyMarkerThumbs(byKey, list, version) {
+    if (version !== this._loadVersion) return;
     const next = this.data.markerViews.map((view, i) => {
-      const record = this._records[i];
+      const record = list[i];
       const key = record && record.photos && record.photos[0] && record.photos[0].key;
       return Object.assign({}, view, { photoUrl: (key && byKey[key]) || view.photoUrl || '' });
     });

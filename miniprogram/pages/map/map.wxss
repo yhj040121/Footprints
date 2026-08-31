@@ -11,52 +11,68 @@
   height: 100%;
 }
 
-/* ---------- Layer 2：暖纸中和层（§23：rgba(246,243,235,.35~.50)，压低绿色/道路橙） ---------- */
+/* ---------- 地图同层纸色：cover-* 才能稳定覆盖原生 map（真机/模拟器一致） ---------- */
 .map-veil {
   position: absolute;
-  inset: 0;
-  background: rgba(246, 243, 235, 0.42);
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(246, 243, 235, 0.12);
   pointer-events: none;
   z-index: 1;
 }
+.map-paper {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.56;
+  pointer-events: none;
+  z-index: 2;
+}
 
-/* ---------- Layer 3：局部透明水墨（§24：不铺满，分别定位） ---------- */
+/* ---------- 局部水墨：只补结构边缘，主材质由上方半透明宣纸统一 ---------- */
 .map-ink {
   position: absolute;
   pointer-events: none;
-  z-index: 2;
-  opacity: 0.8;
+  z-index: 3;
+  opacity: 0.14;
 }
 .map-ink--left {
   left: 0;
-  top: 20%;
-  height: 56%;
-  width: 200rpx;
+  top: 23%;
+  width: 42%;
+  height: 46%;
 }
 .map-ink--bottom {
   left: 0;
-  right: 0;
   bottom: 0;
   width: 100%;
+  height: 27%;
 }
 .map-ink--birds {
-  right: 40rpx;
-  top: 220rpx;
-  width: 180rpx;
+  right: 34rpx;
+  top: 238rpx;
+  width: 156rpx;
+  height: 78rpx;
+  opacity: 0.28;
 }
 
 /* ---------- 顶部统计栏（§26：轻量宣纸信息带，高 70~76rpx，rgba(248,245,237,.72)，无明显边框） ---------- */
 .map-stats {
   position: absolute;
-  left: 16rpx;
-  right: 16rpx;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 10rpx;
   height: 72rpx;
-  padding: 0 22rpx;
-  border-radius: var(--radius-full);
-  background: rgba(248, 245, 237, 0.72);
+  padding: 0 26rpx;
+  border-radius: 0;
+  background: rgba(248, 245, 237, 0.84);
+  box-shadow: 0 1rpx 0 rgba(85, 76, 63, 0.08), 0 8rpx 20rpx rgba(55, 48, 38, 0.03);
   font-size: 24rpx;
   color: var(--color-text-primary);
   z-index: 50;
@@ -69,7 +85,7 @@
 }
 .stat-item { display: inline-flex; align-items: center; }
 .stat-dot { color: var(--color-text-muted); }
-.stat-recent { color: var(--color-text-secondary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.stat-recent { flex: 1; min-width: 0; color: var(--color-text-secondary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .route-info {
   margin-left: auto;
   width: 44rpx; height: 44rpx;
@@ -120,6 +136,7 @@
   width: 86rpx;
   height: 86rpx;
   border-color: rgba(58, 54, 47, 0.72);
+  box-shadow: 0 0 0 5rpx rgba(248, 245, 237, 0.76), 0 8rpx 20rpx rgba(48, 45, 40, 0.16);
 }
 .marker-copy {
   display: flex;
@@ -132,12 +149,12 @@
   font-size: 27rpx;
   font-weight: 600;
   color: #302D28;
-  text-shadow: 0 0 6rpx rgba(248, 245, 237, 0.9);
+  text-shadow: 0 0 7rpx rgba(248, 245, 237, 1), 0 1rpx 0 rgba(248, 245, 237, 1);
 }
 .marker-meta {
   font-size: 23rpx;
   color: #55503F;
-  text-shadow: 0 0 6rpx rgba(248, 245, 237, 0.9);
+  text-shadow: 0 0 7rpx rgba(248, 245, 237, 1), 0 1rpx 0 rgba(248, 245, 237, 1);
 }
 /* 短墨线：照片下方，向下连接坐标墨点（§27.3） */
 .marker-line {
@@ -224,7 +241,8 @@
 .card-thumb {
   flex: none;
   width: 152rpx;
-  height: 186rpx;
+  height: 152rpx;
+  align-self: center;
   border-radius: var(--radius-img);
   background: #E9E2D5;
 }

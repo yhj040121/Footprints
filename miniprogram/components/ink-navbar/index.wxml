@@ -1,8 +1,13 @@
-<!-- 水墨品牌导航条：透明背景浮在页面上，书法标题素材 + 朱砂印（需求文档 §25） -->
+<!-- 水墨品牌导航条：居中书法标题 + 左侧返回，右侧为微信胶囊保留安全空间。 -->
 <view class="ink-navbar" style="padding-top: {{statusBarHeight}}px;">
   <view class="ink-navbar__row">
-    <image wx:if="{{titleImage}}" class="ink-navbar__title-img" src="{{titleImage}}" mode="heightFix" />
-    <text wx:else class="ink-navbar__title-text">{{title}}</text>
+    <button wx:if="{{showBack}}" class="ink-navbar__back" bindtap="onBack" aria-label="返回时间轴">
+      <view class="ink-navbar__back-mark"></view>
+    </button>
+    <view class="ink-navbar__title">
+      <image wx:if="{{titleImage}}" class="ink-navbar__title-img" src="{{titleImage}}" mode="heightFix" />
+      <text wx:else class="ink-navbar__title-text">{{title}}</text>
+    </view>
     <slot></slot>
   </view>
 </view>
