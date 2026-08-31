@@ -52,6 +52,7 @@
           <view class="date">{{group.dateText}}</view>
           <view class="item fp-card" wx:for="{{group.items}}" wx:key="id" wx:for-item="it"
             hover-class="item--hover" bindtap="onItemToggle" data-id="{{it.id}}">
+            <image class="item-bg" src="/assets/bg/card-paper-ink.png" mode="scaleToFill" />
             <view class="check">
               <view class="check-box {{it.selected ? 'check-box--on' : ''}}">
                 <text wx:if="{{it.selected}}" class="check-tick">✓</text>

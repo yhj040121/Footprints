@@ -43,9 +43,6 @@
         cover-url="{{item.coverUrl}}"
         bind:tap="onTapCard"
       />
-      <view wx:if="{{!dayRecords.length}}" class="fp-card day-empty">
-        <text class="fp-hint">这一天还没有行旅记录</text>
-      </view>
     </view>
   </block>
 </view>

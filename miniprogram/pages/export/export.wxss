@@ -122,6 +122,7 @@
 
 /* ---------- 地点卡 ---------- */
 .item {
+  position: relative;
   display: flex;
   align-items: center;
   padding: var(--space-3);
@@ -129,8 +130,19 @@
   border-radius: var(--radius-lg);
   background: var(--color-bg-surface);
   border: 1rpx solid var(--color-border-subtle);
+  overflow: hidden;            /* 让绝对定位的背景图按圆角裁切 */
 }
 .item--hover { background: var(--color-bg-hover); }
+/* 横版水墨底图（与 footprint-card 复用同一张 asset） */
+.item-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+.item > view { position: relative; z-index: 1; }
 .check {
   width: 56rpx;
   height: 56rpx;

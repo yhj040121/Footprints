@@ -139,10 +139,3 @@
   gap: var(--space-3);
   padding: 0 var(--space-4);
 }
-
-.day-empty {
-  min-height: 160rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
