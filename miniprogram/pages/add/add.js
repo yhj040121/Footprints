@@ -268,13 +268,14 @@ Page(Object.assign({
       address: ''
     });
     request.callFunction('geoResolve', { lat, lng, fallbackPlace: place })
-      .then((resp) => {
-        if (!resp || resp.code !== 0 || !resp.data) {
+      .then((g) => {
+        // callFunction 已解包信封，g 即业务数据 { place, address, province, ... }；
+        // 上游解析不出有效地点时静默降级：保留坐标、允许手动补地区，不阻塞保存（V1.3 §6.2）
+        if (!g || !g.place) {
           this.setData({ locationResolving: false });
           return;
         }
         if (this._lat !== lat || this._lng !== lng) return;
-        const g = resp.data;
         const placeFromGeo = g.place || place;
         this.setData({
           locationResolving: false,
