@@ -56,7 +56,7 @@ Page({
           dateText: dateUtil.displayDate(fp.date)
         });
         this.refreshEditDraftBadge();
-        this.signPhotos(fp);
+        this.signPhotos(this.mergeEditDraftPhotos(fp));
       })
       .catch((err) => {
         this.loadedOnce = true;
@@ -85,17 +85,40 @@ Page({
     });
   },
 
+  // 编辑链进行中（syncing）：详情页立即用编辑草稿的照片列表乐观展示——新图直接显示本地临时路径、
+  // 旧图沿用 key 走签名（未命中缓存时 signPhotos 补签），不等后台审核/提交完成；
+  // 后台落定后 loadDetail(force) 刷新为正式数据（FR-11 顺序与内容一致）
+  mergeEditDraftPhotos(fp) {
+    const draft = drafts.listAll().find((d) => d.editId === this.fpId && d.status === 'syncing');
+    if (!draft || !draft.photos || !draft.photos.length) return fp;
+    return Object.assign({}, fp, {
+      photos: draft.photos.map((p) => (p.isOld
+        ? { key: p.key }
+        : { key: '', url: p.tempFilePath }))
+    });
+  },
+
   onRetryEdit() {
     if (!this.data.editDraftId) return;
     getApp().globalData.restoreEditDraftId = this.data.editDraftId;
     wx.switchTab({ url: '/pages/add/add' });
   },
 
-  // 全部 key 一次批量 sign（契约 §1.3：items 1~100，process 白名单 PROCESS_FULL）
+  // 照片列表签名：兼容「key 项（云端照片，签名 URL）」与「本地路径项（编辑乐观图，直显）」混合，
+  // 返回的 photoUrls 与 photos 同序（FR-11 验收 2 顺序一致）；本地项不参与签名
   signPhotos(fp) {
-    const keys = (fp.photos || []).map((p) => p.key).filter(Boolean);
+    const photos = fp.photos || [];
+    const localUrls = photos.map((p) => (p && p.url ? p.url : ''));
+    const keys = [];
+    const keyIndex = [];
+    photos.forEach((p, i) => {
+      if (p && p.key) {
+        keys.push(p.key);
+        keyIndex.push(i);
+      }
+    });
     if (!keys.length) {
-      this.setData({ photoUrls: [] });
+      this.setData({ photoUrls: localUrls, photoFailed: false });
       return;
     }
     const byKey = {};
@@ -103,22 +126,22 @@ Page({
       const cached = contentCache.getSigned(constants.PROCESS_FULL, key);
       if (cached) byKey[key] = cached.url;
     });
-    const cachedUrls = keys.map((key) => byKey[key] || '');
-    this.setData({ photoUrls: cachedUrls, photoFailed: false });
+    const urls = photos.map((p, i) => (p && p.key ? (byKey[p.key] || '') : (localUrls[i] || '')));
+    this.setData({ photoUrls: urls, photoFailed: false });
     const need = keys.filter((key) => !byKey[key]);
     if (!need.length) return;
     request.callFunction('ossSts', {
       action: 'sign',
       items: need.map((key) => ({ key, process: constants.PROCESS_FULL }))
     }).then((data) => {
-      // 按 fp.photos 原顺序取 url，保证预览左右滑动顺序与记录一致（FR-11 验收 2）
+      // 按 photos 原顺序取 url，保证预览左右滑动顺序与记录一致（FR-11 验收 2）
       const signed = (data && data.urls) || [];
       signed.forEach((u) => { byKey[u.key] = u.url; });
       contentCache.setSignedMany(constants.PROCESS_FULL, signed);
-      const urls = keys.map((k) => byKey[k] || '');
-      this.setData({ photoUrls: urls, photoFailed: urls.some((u) => !u) });
+      const finalUrls = photos.map((p, i) => (p && p.key ? (byKey[p.key] || '') : (localUrls[i] || '')));
+      this.setData({ photoUrls: finalUrls, photoFailed: finalUrls.some((u) => !u) });
     }).catch(() => {
-      this.setData({ photoUrls: cachedUrls, photoFailed: cachedUrls.some((u) => !u) });
+      this.setData({ photoUrls: urls, photoFailed: urls.some((u) => !u) });
     });
   },
 

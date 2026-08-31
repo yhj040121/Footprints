@@ -157,11 +157,27 @@ Page({
     return list.map((it) => {
       const d = byFootprintId[it._id];
       if (!d) return it;
-      return Object.assign({}, it, {
+      const patched = Object.assign({}, it, {
         editDraftId: d.id,
         draftStatus: d.status || 'syncing',
         draftError: d.error || ''
       });
+      // 编辑链进行中（syncing）：封面立即用编辑草稿的第一张照片，与新增草稿同样乐观展示——
+      // 新图直接显示本地临时路径，旧图沿用 key 走签名（未命中缓存时 signCovers 补签），
+      // 不等后台审核/提交完成（后台落定后正式记录刷新，封面自然替换）
+      if (d.status === 'syncing') {
+        const first = (d.photos || [])[0];
+        if (first && first.isOld && first.key) {
+          const cached = this._coverCache[first.key];
+          patched.coverKey = first.key;
+          if (cached) patched.coverUrl = cached.url;
+          else patched.coverUrl = '';
+        } else if (first && first.tempFilePath) {
+          patched.coverKey = '';
+          patched.coverUrl = first.tempFilePath;
+        }
+      }
+      return patched;
     });
   },
 

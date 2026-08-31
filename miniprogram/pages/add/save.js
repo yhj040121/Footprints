@@ -63,7 +63,10 @@ module.exports = {
 
   // ---------- 编辑：乐观链（与草稿链同构，失败落在记录上） ----------
 
-  // 立即：快照 + 编辑草稿落盘 + toast + 表单重置 + 回详情页；后台：runEditSave 推进全链
+  // 立即：快照 + 编辑草稿落盘 + toast + 表单重置 + 回时间线；后台：runEditSave 推进全链。
+  // 注意：编辑入口经 switchTab 进入 add（tab 页无法 navigateTo），原详情页已被销毁；
+  // 保存后若 navigateTo 新详情页，系统返回键必然落回 add 空表单（微信 tab 页硬限制）。
+  // 因此与新增保存一致，保存后切回时间线——后台链落定后时间线即显示最新记录。
   startEditSave() {
     if (!this._clientSaveId || this._formDirty) {
       this._clientSaveId = uuidUtil.uuid();
@@ -87,11 +90,11 @@ module.exports = {
       createdAt: Date.now()
     }, snap));
 
-    // 立即反馈：用户马上看到「已保存」并回到详情页（编辑在后台推进，失败标注在记录上）
+    // 立即反馈：用户马上看到「已保存」并回到时间线（编辑在后台推进，失败标注在记录上）
     wx.showToast({ title: '已保存', icon: 'success' });
     this.resetForm();
     wx.setNavigationBarTitle({ title: '溪山行旅' });
-    setTimeout(() => wx.navigateTo({ url: '/pages/detail/detail?id=' + editId }), 600);
+    setTimeout(() => wx.switchTab({ url: '/pages/timeline/timeline' }), 600);
 
     const ctx = {
       cancelled: false,
