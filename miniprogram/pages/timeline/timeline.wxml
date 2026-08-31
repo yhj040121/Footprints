@@ -1,9 +1,9 @@
-<!-- 时间线 tab 页（FR-08）：左侧日期分组 + 竖向时间轴 + 卡片；左滑露出「导出」「删除」 -->
+<!-- 时间线 tab 页（V1.3）：窄时间线只保留节点，日期信息留在记录详情；
+   卡片直接进入详情页；导出/删除入口已移除（用户拍板）。 -->
 <view class="page" bindtap="onListTap">
-  <image class="page-bg" src="/assets/bg/ink-bg.png" mode="aspectFill" />
+  <image class="page-bg" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
   <mock-badge />
 
-  <!-- 首屏加载骨架 -->
   <view wx:if="{{loading}}" class="skeleton">
     <view class="sk-row" wx:for="{{[1,2,3]}}" wx:key="*this">
       <view class="sk-date"></view>
@@ -11,7 +11,6 @@
     </view>
   </view>
 
-  <!-- 登录/首屏失败：网络不可用重试态（FR-01 验收 4，不白屏） -->
   <view wx:elif="{{loginError}}" class="state">
     <view class="state-icon">☁</view>
     <view class="state-title">网络不可用</view>
@@ -19,7 +18,6 @@
     <button class="fp-btn-primary state-btn" bindtap="onRetryLogin">重试</button>
   </view>
 
-  <!-- 空状态（FR-08 验收 6） -->
   <view wx:elif="{{list.length === 0}}" class="state">
     <view class="state-icon">✎</view>
     <view class="state-title">还没有足迹</view>
@@ -27,60 +25,26 @@
     <button class="fp-btn-primary state-btn" bindtap="onGoAdd">去记录</button>
   </view>
 
-  <!-- 时间轴列表 -->
   <block wx:else>
     <view class="tl-list">
       <view class="tl-row" wx:for="{{list}}" wx:key="_id">
-        <!-- 左侧日期：同一天只在第一条显示（FR-08 分组） -->
         <view class="tl-side">
-          <block wx:if="{{item.showDate}}">
-            <view class="tl-year">{{item.dateYear}}</view>
-            <view class="tl-md">{{item.dateMd}}</view>
-          </block>
           <view class="tl-track">
             <view class="tl-dot"></view>
           </view>
         </view>
 
-        <!-- 左滑区：操作层在底，卡片随 offsetX 平移 -->
-        <view class="swipe-item">
-          <view class="swipe-actions">
-            <view class="action action-export" data-id="{{item._id}}" catchtap="onExportTap">导出</view>
-            <view class="action action-delete" data-id="{{item._id}}" catchtap="onDeleteTap">删除</view>
-          </view>
-          <view
-            class="swipe-card {{item.animating ? 'swipe-card--anim' : ''}}"
-            style="transform: translateX({{item.offsetX}}px);"
-            data-id="{{item._id}}"
-            data-index="{{index}}"
-            bindtouchstart="onTouchStart"
-            bindtouchmove="onTouchMove"
-            bindtouchend="onTouchEnd"
-            bindtouchcancel="onTouchEnd"
-          >
-            <footprint-card record="{{item}}" cover-url="{{item.coverUrl}}" bind:tap="onCardTap" />
-          </view>
+        <view class="card-wrap">
+          <footprint-card
+            record="{{item}}"
+            cover-url="{{item.coverUrl}}"
+            bind:tap="onCardTap"
+          />
         </view>
       </view>
     </view>
 
-    <!-- 分页footer -->
     <view wx:if="{{loadingMore}}" class="footer">加载中…</view>
     <view wx:elif="{{!hasMore && list.length > 0}}" class="footer">— 到底啦 —</view>
   </block>
-
-  <!-- 导出进度弹层（FR-15②：进度 → 汇总；取消/重试失败张/完成） -->
-  <view wx:if="{{exportVisible}}" class="mask" catchtouchmove="noop">
-    <view class="panel">
-      <view class="panel-title">导出照片</view>
-      <view class="panel-text">{{exportText}}</view>
-      <view wx:if="{{exportPhase === 'running'}}" class="panel-btns">
-        <button class="fp-btn-plain panel-btn" bindtap="onExportCancel">取消</button>
-      </view>
-      <view wx:else class="panel-btns">
-        <button wx:if="{{exportFailedCount > 0}}" class="fp-btn-plain panel-btn" bindtap="onExportRetry">重试失败张</button>
-        <button class="fp-btn-primary panel-btn" bindtap="onExportClose">完成</button>
-      </view>
-    </view>
-  </view>
 </view>

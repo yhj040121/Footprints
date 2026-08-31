@@ -1,31 +1,65 @@
-<!-- 足迹地图（FR-10）：全屏地图 + 打点连线 + 底部记录卡片 + 定位我 -->
+<!-- 足迹地图 V1.3：真实地点独立标注、照片 Marker、时间顺序虚线、统计与底部详情卡片。
+     微信原生 <map> 底图无法完全水墨化，仅加不拦截手势的水墨装饰层（.map-wash）。 -->
 <view class="map-page">
   <mock-badge />
   <map id="footprintMap" class="map"
        latitude="{{latitude}}" longitude="{{longitude}}" scale="{{scale}}"
-       markers="{{markers}}" polyline="{{polyline}}"
-       bindmarkertap="onMarkerTap" bindtap="onMapTap" bindregionchange="onRegionChange"></map>
+       include-points="{{includePoints}}" markers="{{markers}}" polyline="{{polyline}}"
+       bindmarkertap="onMarkerTap" bindcallouttap="onCalloutTap"
+       bindtap="onMapTap" bindregionchange="onRegionChange">
+    <cover-view slot="callout">
+      <cover-view wx:for="{{markerViews}}" wx:key="recordId" marker-id="{{item.markerId}}"
+                  class="marker-callout marker-callout--{{item.side}} {{item.selected ? 'marker-callout--selected' : ''}}">
+        <cover-image wx:if="{{item.photoUrl}}" class="marker-photo" src="{{item.photoUrl}}" />
+        <cover-image wx:else class="marker-photo marker-photo--fallback" src="/assets/icons/marker.png" />
+        <cover-view class="marker-copy">
+          <cover-view class="marker-place">{{item.place}}</cover-view>
+          <cover-view class="marker-meta">{{item.meta}}</cover-view>
+        </cover-view>
+      </cover-view>
+    </cover-view>
+  </map>
 
-  <!-- 图例说明（FR-10 验收 6）：仅说明记录顺序，不提路线/轨迹还原 -->
-  <view class="legend fp-hint">连线仅表示记录先后顺序，不代表真实行走路线</view>
+  <image class="map-wash" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
 
-  <view wx:if="{{empty}}" class="empty-hint fp-hint">暂无带位置的足迹</view>
+  <view class="map-stats">
+    <view class="stat-item"><text>{{footprintCount}} 处足迹</text></view>
+    <text class="stat-dot">·</text>
+    <view class="stat-item"><text>{{cityCount}} 座城市</text></view>
+    <text class="stat-dot">·</text>
+    <view class="stat-item stat-recent"><text>最近：{{recentRegion}}</text></view>
+    <button class="route-info" bindtap="onRouteInfoTap">?</button>
+  </view>
 
-  <!-- 定位我（右下角圆形按钮） -->
-  <button class="locate-btn {{card ? 'locate-btn--up' : ''}}" bindtap="onLocate" hover-class="locate-btn--hover">
-    <view class="locate-icon"><view class="locate-dot"></view></view>
+  <view wx:if="{{empty}}" class="empty-hint">
+    <text class="empty-title">还没有留下足迹</text>
+    <text class="empty-desc">记录一次旅行后，它会出现在这里</text>
+  </view>
+  <view wx:if="{{mapError}}" class="empty-hint">
+    <text class="empty-title">地图暂时没有加载出来</text>
+    <text class="empty-desc">请稍后再试</text>
+  </view>
+
+  <button class="locate-btn {{card ? 'locate-btn--up' : ''}}" bindtap="onLocate" loading="{{locating}}" hover-class="locate-btn--hover">
+    <image class="locate-icon-img" src="/assets/icons/marker.png" mode="aspectFit" />
     <text class="locate-text">定位我</text>
   </button>
 
-  <!-- 底部记录浮层卡片 -->
-  <view wx:if="{{card}}" class="fp-card map-card" bindtap="onCardTap">
+  <view wx:if="{{card}}" class="map-card">
     <image wx:if="{{card.thumb}}" class="card-thumb" src="{{card.thumb}}" mode="aspectFill" />
-    <view wx:else class="card-thumb card-thumb--empty"></view>
     <view class="card-body">
-      <text class="card-date fp-hint">{{card.dateText}}</text>
-      <text class="card-place">{{card.place}}</text>
-      <text wx:if="{{card.note}}" class="card-note">{{card.note}}</text>
+      <view class="card-headline">
+        <view class="card-copy">
+          <text class="card-place">{{card.place}}</text>
+          <text wx:if="{{card.regionText}}" class="card-region">{{card.regionText}}</text>
+          <text class="card-meta">{{card.dateText}}　{{card.photoCount}}张照片</text>
+        </view>
+        <button class="view-record" bindtap="onCardTap">查看记录</button>
+      </view>
+      <view wx:if="{{card.previews.length}}" class="preview-row">
+        <image wx:for="{{card.previews}}" wx:key="*this" class="preview-img" src="{{item}}" mode="aspectFill" />
+        <view wx:if="{{card.moreCount > 0}}" class="preview-more">+{{card.moreCount}}</view>
+      </view>
     </view>
-    <view class="card-close" catchtap="onCardClose">×</view>
   </view>
 </view>

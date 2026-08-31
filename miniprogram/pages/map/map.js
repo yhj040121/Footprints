@@ -1,36 +1,50 @@
-// 足迹地图页（FR-10）：含坐标记录打点 + 按记录先后顺序连线 + 底部记录卡片 + 定位我
-// 视角保持（FR-10 验收 4）：onShow 重拉数据保证 marker 最新，但恢复用户离开前的中心点与缩放
-// （regionchange 捕获视角；首进仍居中到最新一条记录）
+// 足迹地图 V1.3：真实地点独立标注、照片 Marker、时间顺序虚线、统计与底部详情卡片。
 const db = require('../../utils/db');
 const dateUtil = require('../../utils/date');
 const request = require('../../utils/request');
 const constants = require('../../utils/constants');
 const contentCache = require('../../utils/content-cache');
 
-// 无任何含坐标记录时的默认中心（无锡附近）与缩放
-const DEFAULT_CENTER = { latitude: 31.57, longitude: 120.30 };
-const DEFAULT_SCALE = 8;
-const LOCATE_SCALE = 12;
-// marker 点击后 map 的 tap 可能连带触发，此窗口内的 map tap 视为打点而非点空白
+const DEFAULT_CENTER = { latitude: 30.75, longitude: 120.75 };
+const DEFAULT_SCALE = 9;
+const LOCATE_SCALE = 13;
 const MARKER_TAP_GUARD_MS = 300;
+
+function shortDate(date) {
+  return (date || '').slice(5).replace('-', '.');
+}
+
+function cleanRegion(value) {
+  return (value || '').replace(/(特别行政区|自治州|地区|盟|市)$/u, '');
+}
+
+function regionText(record) {
+  return [record.city, record.district].filter(Boolean).join('') || record.address || '';
+}
 
 Page({
   data: {
     latitude: DEFAULT_CENTER.latitude,
     longitude: DEFAULT_CENTER.longitude,
     scale: DEFAULT_SCALE,
+    includePoints: [],
     markers: [],
+    markerViews: [],
     polyline: [],
-    empty: false,      // 无任何含坐标记录
-    card: null,        // 底部卡片 { id, dateText, place, note, thumb }
+    footprintCount: 0,
+    cityCount: 0,
+    recentRegion: '—',
+    empty: false,
+    mapError: false,
+    card: null,
     locating: false
   },
 
   onLoad() {
-    this._records = [];       // 与 markers 同序的原始记录（id = 数组下标）
-    this._thumbCache = {};    // recordId -> { url, expireAt }，签名 URL 1h 内复用
+    this._records = [];
+    this._thumbCache = {};
     this._lastMarkerTapAt = 0;
-    this._view = null;        // 用户离开前的视角 { latitude, longitude, scale }（regionchange 捕获）
+    this._view = null;
     this._skipShowRefresh = true;
     this.loadRecords(false);
   },
@@ -42,61 +56,129 @@ Page({
       this._skipShowRefresh = false;
       return;
     }
-    // 重拉数据（新增/编辑/删除后 marker 刷新），但保持离开前的视角
     this.loadRecords(true);
   },
 
-  // 全部含坐标记录（工具层已过滤成对 number 坐标，并按 date asc + createdAt asc 排序，同日按创建先后连线）
-  // keepView=true 时不重置中心点与缩放
   loadRecords(keepView) {
-    db.listWithLocation().then((list) => {
+    db.listWithLocation({ force: true }).then((list) => {
       this._records = list;
       const markers = list.map((f, i) => ({
         id: i,
         latitude: f.lat,
         longitude: f.lng,
         iconPath: '/assets/icons/marker.png',
-        width: 32,
-        height: 32,
-        anchor: { x: 0.5, y: 0.5 }
+        width: 14,
+        height: 14,
+        anchor: { x: 0.5, y: 0.5 },
+        customCallout: { display: 'ALWAYS', anchorY: -2 }
+      }));
+      const markerViews = list.map((f, i) => ({
+        markerId: i,
+        recordId: f._id,
+        place: f.place,
+        meta: shortDate(f.date) + ((f.photos || []).length ? ' · ' + f.photos.length + '张' : ''),
+        photoUrl: '',
+        hasPhoto: !!((f.photos || [])[0] && (f.photos || [])[0].key),
+        side: i % 2 ? 'left' : 'right',
+        selected: false
       }));
       const points = list.map((f) => ({ latitude: f.lat, longitude: f.lng }));
       const polyline = points.length >= 2 ? [{
-        points: points,
-        color: '#35322C',
+        points,
+        color: '#4E484080',
         width: 2,
+        dottedLine: true,
         arrowLine: false
       }] : [];
+      const citySet = {};
+      list.forEach((f) => {
+        const city = cleanRegion(f.cityLabel || f.city);
+        if (city) citySet[city] = true;
+      });
+      const recent = list.slice().reverse().find((f) => f.cityLabel || f.city || f.province);
+      const latest = list[list.length - 1];
+      const includePoints = this.pointsForInitialView(points);
       const patch = {
-        markers: markers,
-        polyline: polyline,
-        empty: list.length === 0
+        markers,
+        markerViews,
+        polyline,
+        includePoints: keepView ? [] : includePoints,
+        footprintCount: list.length,
+        cityCount: Object.keys(citySet).length,
+        recentRegion: recent ? cleanRegion(recent.cityLabel || recent.city || recent.province) : '—',
+        empty: list.length === 0,
+        mapError: false
       };
       if (keepView) {
-        // 恢复离开前视角；用户未拖动过地图则维持当前中心
         const view = this._view || {
           latitude: this.data.latitude,
           longitude: this.data.longitude,
           scale: this.data.scale
         };
-        patch.latitude = view.latitude;
-        patch.longitude = view.longitude;
-        patch.scale = view.scale;
-        // 打开中的卡片对应记录已不在 → 收起
+        Object.assign(patch, view);
         if (this.data.card && !list.some((f) => f._id === this.data.card.id)) patch.card = null;
       } else {
-        const latest = list[list.length - 1];
         patch.latitude = latest ? latest.lat : DEFAULT_CENTER.latitude;
         patch.longitude = latest ? latest.lng : DEFAULT_CENTER.longitude;
         patch.scale = DEFAULT_SCALE;
       }
       this.setData(patch);
+      this.loadMarkerThumbs(list);
     }).catch((err) => {
-      wx.showToast({ title: (err && err.message) || '加载失败，请稍后再试', icon: 'none' });
+      this.setData({ mapError: true });
+      wx.showToast({ title: (err && err.message) || '地图暂时没有加载出来', icon: 'none' });
     });
   },
 
-  // 手势/程序化视野变化结束时捕获中心点与缩放（视角保持的数据源）
+  pointsForInitialView(points) {
+    if (points.length <= 1) return points;
+    const lats = points.map((p) => p.latitude);
+    const lngs = points.map((p) => p.longitude);
+    const span = Math.max(
+      Math.max.apply(null, lats) - Math.min.apply(null, lats),
+      Math.max.apply(null, lngs) - Math.min.apply(null, lngs)
+    );
+    return span > 5 ? points.slice(-5) : points;
+  },
+
+  loadMarkerThumbs(list) {
+    const need = [];
+    const byKey = {};
+    list.forEach((f) => {
+      const first = (f.photos || [])[0];
+      if (!first || !first.key) return;
+      const cached = this._thumbCache[first.key] || contentCache.getSigned(constants.PROCESS_THUMB, first.key);
+      if (cached && cached.url && cached.expireAt > Date.now() + 60000) {
+        byKey[first.key] = cached.url;
+      } else if (!need.includes(first.key)) {
+        need.push(first.key);
+      }
+    });
+    this.applyMarkerThumbs(byKey);
+    if (!need.length) return;
+    request.callFunction('ossSts', {
+      action: 'sign',
+      items: need.map((key) => ({ key, process: constants.PROCESS_THUMB }))
+    }).then((data) => {
+      const items = (data && data.urls) || [];
+      contentCache.setSignedMany(constants.PROCESS_THUMB, items);
+      items.forEach((item) => {
+        this._thumbCache[item.key] = item;
+        byKey[item.key] = item.url;
+      });
+      this.applyMarkerThumbs(byKey);
+    }).catch(() => {});
+  },
+
+  applyMarkerThumbs(byKey) {
+    const next = this.data.markerViews.map((view, i) => {
+      const record = this._records[i];
+      const key = record && record.photos && record.photos[0] && record.photos[0].key;
+      return Object.assign({}, view, { photoUrl: (key && byKey[key]) || view.photoUrl || '' });
+    });
+    this.setData({ markerViews: next });
+  },
+
   onRegionChange(e) {
     if (!e || e.type !== 'end') return;
     const d = e.detail || {};
@@ -107,93 +189,115 @@ Page({
   },
 
   onMarkerTap(e) {
-    const record = this._records[e.detail.markerId];
-    if (!record) return;
-    this._lastMarkerTapAt = Date.now();
-    this.setData({
-      card: {
-        id: record._id,
-        dateText: dateUtil.displayDate(record.date),
-        place: record.place,
-        note: record.note || '',
-        thumb: ''
-      }
-    });
-    this.loadThumb(record);
+    this.selectMarker(Number(e.detail.markerId));
   },
 
-  // 首图缩略图（w_300）按需签发；签发失败仅缺图，不影响卡片其余字段
-  loadThumb(record) {
-    const first = (record.photos || [])[0];
-    if (!first || !first.key) return;
-    const cached = this._thumbCache[record._id] || contentCache.getSigned(constants.PROCESS_THUMB, first.key);
-    if (cached && cached.expireAt > Date.now()) {
-      this._thumbCache[record._id] = cached;
-      this.setData({ 'card.thumb': cached.url });
-      return;
-    }
+  onCalloutTap(e) {
+    this.selectMarker(Number(e.detail.markerId));
+  },
+
+  selectMarker(markerId) {
+    const record = this._records[markerId];
+    if (!record) return;
+    this._lastMarkerTapAt = Date.now();
+    const photoCount = (record.photos || []).length;
+    this.setData({
+      markerViews: this.data.markerViews.map((view, i) => Object.assign({}, view, { selected: i === markerId })),
+      card: {
+        id: record._id,
+        place: record.place,
+        regionText: regionText(record),
+        dateText: dateUtil.displayDate(record.date),
+        photoCount,
+        thumb: '',
+        previews: [],
+        moreCount: 0
+      }
+    });
+    this.loadCardPhotos(record);
+  },
+
+  loadCardPhotos(record) {
+    const photos = (record.photos || []).filter((p) => p && p.key);
+    if (!photos.length) return;
+    const selected = photos.slice(0, 6);
+    const byKey = {};
+    const need = [];
+    selected.forEach((p) => {
+      const cached = contentCache.getSigned(constants.PROCESS_THUMB, p.key);
+      if (cached && cached.url && cached.expireAt > Date.now() + 60000) byKey[p.key] = cached.url;
+      else need.push(p.key);
+    });
+    const apply = () => {
+      if (!this.data.card || this.data.card.id !== record._id) return;
+      const urls = selected.map((p) => byKey[p.key]).filter(Boolean);
+      const visibleCount = photos.length > 5 ? 5 : 6;
+      this.setData({
+        'card.thumb': urls[0] || '',
+        'card.previews': urls.slice(0, visibleCount),
+        'card.moreCount': Math.max(0, photos.length - visibleCount)
+      });
+    };
+    apply();
+    if (!need.length) return;
     request.callFunction('ossSts', {
       action: 'sign',
-      items: [{ key: first.key, process: constants.PROCESS_THUMB }]
+      items: need.map((key) => ({ key, process: constants.PROCESS_THUMB }))
     }).then((data) => {
-      const item = (data.urls || [])[0];
-      if (!item) return;
-      this._thumbCache[record._id] = { url: item.url, expireAt: item.expireAt };
-      contentCache.setSignedMany(constants.PROCESS_THUMB, [item]);
-      if (this.data.card && this.data.card.id === record._id) {
-        this.setData({ 'card.thumb': item.url });
-      }
+      const items = (data && data.urls) || [];
+      contentCache.setSignedMany(constants.PROCESS_THUMB, items);
+      items.forEach((item) => { byKey[item.key] = item.url; });
+      apply();
     }).catch(() => {});
   },
 
-  // 点地图空白收起卡片（打点后的连带 tap 在守卫窗口内忽略）
   onMapTap() {
     if (Date.now() - this._lastMarkerTapAt < MARKER_TAP_GUARD_MS) return;
-    if (this.data.card) this.setData({ card: null });
-  },
-
-  onCardClose() {
-    this.setData({ card: null });
+    if (this.data.card) {
+      this.setData({
+        card: null,
+        markerViews: this.data.markerViews.map((view) => Object.assign({}, view, { selected: false }))
+      });
+    }
   },
 
   onCardTap() {
-    const card = this.data.card;
-    if (!card) return;
-    wx.navigateTo({ url: '/pages/detail/detail?id=' + card.id });
+    if (this.data.card) wx.navigateTo({ url: '/pages/detail/detail?id=' + this.data.card.id });
   },
 
-  // 「定位我」：wgs84 取当前位置并移中心；拒绝授权则引导去设置，其余功能不受影响
+  onRouteInfoTap() {
+    wx.showModal({
+      title: '足迹连线说明',
+      content: '足迹连线仅表示记录的先后顺序，不代表真实行走路线。',
+      showCancel: false,
+      confirmText: '知道了',
+      confirmColor: '#35322C'
+    });
+  },
+
   onLocate() {
     if (this.data.locating) return;
     this.setData({ locating: true });
     wx.getLocation({
-      type: 'wgs84',
+      type: 'gcj02',
       success: (res) => {
-        this.setData({
-          latitude: res.latitude,
-          longitude: res.longitude,
-          scale: LOCATE_SCALE
-        });
+        this.setData({ latitude: res.latitude, longitude: res.longitude, scale: LOCATE_SCALE, includePoints: [] });
       },
       fail: (err) => {
-        const denied = err && err.errMsg && err.errMsg.indexOf('auth') >= 0;
+        const denied = /auth|deny|authorize/.test((err && err.errMsg) || '');
         if (denied) {
           wx.showModal({
             title: '未授权定位',
             content: '开启定位权限后可定位到当前位置，地图浏览不受影响',
             confirmText: '去设置',
             cancelText: '取消',
-            success: (r) => {
-              if (r.confirm) wx.openSetting();
-            }
+            success: (r) => { if (r.confirm) wx.openSetting(); }
           });
         } else {
-          wx.showToast({ title: '定位失败，请稍后再试', icon: 'none' });
+          wx.showToast({ title: '暂时无法获取当前位置', icon: 'none' });
         }
       },
-      complete: () => {
-        this.setData({ locating: false });
-      }
+      complete: () => this.setData({ locating: false })
     });
   }
 });

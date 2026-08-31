@@ -111,13 +111,16 @@ async function handleCommitSave(event, openid) {
 
   // ---- 步骤 2：文本终审（不信任前端预检，FR-02 验收 7） ----
   // S7-R4：预设标签已移除，tags 全部命中本人 customTags（validateTags），全部按自定义标签重审
-  await textFinalCheck(
-    [
-      { field: 'place', content: input.place },
-      { field: 'note', content: input.note },
-    ].concat(input.tags.map((t) => ({ field: 'customTag', content: t }))),
-    openid
-  );
+  const saveTexts = [
+    { field: 'place', content: input.place },
+    { field: 'note', content: input.note },
+    { field: 'address', content: input.address },
+    { field: 'province', content: input.province },
+    { field: 'city', content: input.city },
+    { field: 'district', content: input.district },
+    { field: 'cityLabel', content: input.cityLabel },
+  ].filter((item) => item.content);
+  await textFinalCheck(saveTexts.concat(input.tags.map((t) => ({ field: 'customTag', content: t }))), openid);
 
   // ---- 步骤 3：照片终审（S6-R2 三元组，返回绑定供转正） ----
   let resolved = []; // [{ photoId, imgKey, travelKey }]
@@ -136,6 +139,13 @@ async function handleCommitSave(event, openid) {
         place: input.place,
         lat: input.lat,
         lng: input.lng,
+        address: input.address,
+        province: input.province,
+        city: input.city,
+        district: input.district,
+        adcode: input.adcode,
+        cityLabel: input.cityLabel,
+        locationSource: input.locationSource,
         note: input.note,
         tags: input.tags,
         photos: resolved.map((r) => ({ key: r.travelKey })), // S6-R2：入库 key = 预绑定 travel key
@@ -217,6 +227,9 @@ async function handleCommitEdit(event, openid) {
   const diffItems = [];
   if (input.place !== (fp.place || '')) diffItems.push({ field: 'place', content: input.place });
   if (input.note !== (fp.note || '')) diffItems.push({ field: 'note', content: input.note });
+  ['address', 'province', 'city', 'district', 'cityLabel'].forEach((field) => {
+    if (input[field] && input[field] !== (fp[field] || '')) diffItems.push({ field, content: input[field] });
+  });
   const oldTags = new Set(fp.tags || []);
   for (const t of input.tags) {
     if (oldTags.has(t)) continue; // S7-R4：预设清单已移除；保留项不重审（豁免口径），仅新增项重审
@@ -269,6 +282,13 @@ async function handleCommitEdit(event, openid) {
         place: input.place,
         lat: input.lat,
         lng: input.lng,
+        address: input.address,
+        province: input.province,
+        city: input.city,
+        district: input.district,
+        adcode: input.adcode,
+        cityLabel: input.cityLabel,
+        locationSource: input.locationSource,
         note: input.note,
         tags: input.tags,
         photos: newKeys.map((k) => ({ key: k })),

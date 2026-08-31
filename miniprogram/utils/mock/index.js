@@ -100,6 +100,23 @@ const handlers = {
   },
 
   // §1.2 secCheck
+  // 腾讯位置服务逆地址解析的本地替身：按演示坐标返回结构化省市区（V1.3）
+  geoResolve(data) {
+    const lat = Number(data && data.lat);
+    const lng = Number(data && data.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return fail(1001, '位置坐标无效');
+    let region = { province: '浙江省', city: '嘉兴市', district: '南湖区', adcode: '330402', cityLabel: '嘉兴' };
+    if (lat > 31.2 && lng > 120.0 && lng < 120.6) region = { province: '江苏省', city: '无锡市', district: '滨湖区', adcode: '320211', cityLabel: '无锡' };
+    else if (lat > 30.05 && lat < 30.6 && lng > 119.8 && lng < 120.5) region = { province: '浙江省', city: '杭州市', district: '西湖区', adcode: '330106', cityLabel: '杭州' };
+    const place = ((data && data.fallbackPlace) || region.cityLabel + '附近').slice(0, 50);
+    return ok(Object.assign({
+      place,
+      address: region.province + region.city + region.district + place,
+      lat,
+      lng
+    }, region));
+  },
+
   secCheck(data) {
     const action = data.action;
     if (action === 'text') {

@@ -15,9 +15,39 @@ const seed = [
   { date: '2025-12-01', place: '北京·颐和园', lat: 39.99, lng: 116.27, note: '补记：冬日昆明湖结了薄冰。', tags: ['人文'], photos: ['mock07'] }
 ];
 
+
+// 地点关键词 → 行政地区（V1.3：与真实记录地区口径一致）
+const REGION_RULES = [
+  ['无锡', '江苏省', '无锡市', '滨湖区'],
+  ['苏州', '江苏省', '苏州市', '姑苏区'],
+  ['杭州', '浙江省', '杭州市', '西湖区'],
+  ['黄山', '安徽省', '黄山市', '黄山区'],
+  ['南京', '江苏省', '南京市', '玄武区'],
+  ['婺源', '江西省', '上饶市', '婺源县'],
+  ['楠溪江', '浙江省', '温州市', '永嘉县'],
+  ['平遥', '山西省', '晋中市', '平遥县'],
+  ['东山岛', '福建省', '漳州市', '东山县'],
+  ['北京', '北京市', '北京市', '海淀区']
+];
+
+function regionFor(place) {
+  const hit = REGION_RULES.find((r) => place.indexOf(r[0]) >= 0);
+  if (!hit) return { address: '', province: '', city: '', district: '', adcode: '', cityLabel: '', locationSource: 'legacy' };
+  return {
+    address: hit[1] + hit[2] + hit[3] + place,
+    province: hit[1],
+    city: hit[2],
+    district: hit[3],
+    adcode: '',
+    cityLabel: hit[2].replace(/市$/, ''),
+    locationSource: 'legacy'
+  };
+}
+
+
 function buildSeed() {
   const base = Date.now();
-  return seed.map((s, i) => ({
+  return seed.map((s, i) => Object.assign({
     _id: 'mock_fp_' + (i + 1),
     date: s.date,
     place: s.place,
@@ -30,7 +60,7 @@ function buildSeed() {
     })),
     // createdAt 递减，保证同日多条有稳定先后（后建的排前）
     createdAt: base - i * 60000
-  }));
+  }, regionFor(s.place)));
 }
 
 module.exports = { buildSeed };

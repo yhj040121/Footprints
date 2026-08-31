@@ -1,26 +1,22 @@
-<!-- 新增/编辑足迹（FR-03~07 / FR-13）：照片九宫格 + 表单 + 保存全链路 -->
+<!-- 新增/编辑足迹（FR-03~07 / FR-13 / V1.3 位置交互）：照片九宫格 + 表单 + 保存全链路 -->
 <view class="page">
-  <image class="page-bg" src="/assets/bg/ink-bg.png" mode="aspectFill" />
+  <image class="page-bg" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
   <mock-badge />
 
-  <!-- 编辑模式提示条 -->
   <view wx:if="{{isEdit}}" class="edit-bar">
     <text>正在编辑这条足迹</text>
     <text class="edit-cancel" bindtap="onCancelEdit">取消编辑</text>
   </view>
 
-  <!-- 照片区：≤9 张，选定仅本地预览，点保存后先传隔离区再审核（FR-05 / §4.1 S6-R2 时序） -->
   <view class="photo-grid">
     <view class="photo-cell" wx:for="{{photos}}" wx:key="uid">
       <image class="photo-img" src="{{item.url}}" mode="aspectFill" wx:if="{{item.url}}" />
       <view class="photo-img photo-img--empty" wx:else></view>
 
-      <!-- 状态遮罩（S7-R4：审核过程无感知，checking 不再显示「检测中」文案） -->
       <view wx:if="{{item.status === 'uploading'}}" class="photo-mask">{{item.progress}}%</view>
       <view wx:elif="{{item.status === 'review-failed'}}" class="photo-mask photo-mask--bad">未通过</view>
       <view wx:elif="{{item.status === 'upload-failed'}}" class="photo-mask photo-mask--bad" catchtap="onPhotoRetry" data-uid="{{item.uid}}">失败 · 重试</view>
 
-      <!-- 移除（保存中禁用） -->
       <view wx:if="{{!saving}}" class="photo-del" catchtap="onRemovePhoto" data-uid="{{item.uid}}">✕</view>
     </view>
 
@@ -30,7 +26,6 @@
     </view>
   </view>
 
-  <!-- 日期（FR-03：只选年月日，默认今天，不可选未来） -->
   <view class="fp-card field-card">
     <picker mode="date" value="{{date}}" end="{{today}}" bindchange="onDateChange" disabled="{{saving}}">
       <view class="field-row">
@@ -43,32 +38,46 @@
     </picker>
   </view>
 
-  <!-- 地点（FR-03/FR-04：手动输入 ≤50 字；选点回填；手动改写清坐标） -->
-  <view class="fp-card field-card">
-    <view class="field-row field-row--input">
-      <text class="field-label">地点</text>
-      <input
-        class="field-input"
-        value="{{place}}"
-        maxlength="50"
-        placeholder="在哪里"
-        placeholder-class="ph"
-        bindinput="onPlaceInput"
-        bindblur="onPlaceBlur"
-        disabled="{{saving}}"
-      />
-    </view>
-    <view class="field-row field-row--loc">
-      <view class="loc-status">
-        <text wx:if="{{placeError}}" class="field-error">{{placeError}}</text>
-        <text wx:elif="{{placeHint}}" class="field-hint">{{placeHint}}</text>
-        <text wx:elif="{{hasCoord}}" class="fp-hint">已获取坐标，保存后上地图</text>
+  <!-- 地点（V1.3）：并列「获取当前位置 / 选择位置」；修改名称/地区不动坐标；重新选择才动坐标 -->
+  <view class="fp-card field-card location-card">
+    <view class="field-label location-title">地点</view>
+    <input
+      class="location-name-input"
+      value="{{place}}"
+      maxlength="50"
+      placeholder="为这次旅行记录一个位置"
+      placeholder-class="ph"
+      bindinput="onPlaceInput"
+      bindblur="onPlaceBlur"
+      disabled="{{saving}}"
+    />
+
+    <view wx:if="{{hasCoord}}" class="location-selected">
+      <view class="region-line">
+        <text>{{province || '地区待补充'}}</text>
+        <text wx:if="{{city}}"> · {{city}}</text>
+        <text wx:if="{{district}}"> · {{district}}</text>
       </view>
-      <button class="fp-btn-plain loc-btn" bindtap="onGetLocation" disabled="{{saving}}">获取当前位置</button>
+      <view class="city-label">足迹归属：{{cityLabel || '待补充'}}</view>
+      <view class="location-actions">
+        <button class="fp-btn-plain loc-action" bindtap="onOpenRegionEditor" disabled="{{saving}}">修改地区</button>
+        <button class="fp-btn-plain loc-action" bindtap="onReselectLocation" disabled="{{saving}}">重新选择</button>
+      </view>
+    </view>
+    <view wx:else class="location-empty-copy">获取现场位置，或在地图中补录过去的旅程</view>
+
+    <view class="location-status">
+      <text wx:if="{{placeError}}" class="field-error">{{placeError}}</text>
+      <text wx:elif="{{placeHint}}" class="field-hint">{{placeHint}}</text>
+      <text wx:elif="{{locationResolving}}" class="fp-hint">正在识别地点与地区…</text>
+    </view>
+
+    <view wx:if="{{!hasCoord}}" class="location-actions location-actions--primary">
+      <button class="fp-btn-plain loc-action" bindtap="onGetCurrentLocation" loading="{{locationResolving}}" disabled="{{saving || locationResolving}}">获取当前位置</button>
+      <button class="fp-btn-plain loc-action" bindtap="onChooseLocation" disabled="{{saving || locationResolving}}">选择位置</button>
     </view>
   </view>
 
-  <!-- 备注（FR-03：≤500 字，实时计数） -->
   <view class="fp-card field-card">
     <view class="field-label note-label">备注</view>
     <textarea
@@ -89,10 +98,23 @@
     </view>
   </view>
 
-  <!-- 保存 -->
   <button class="fp-btn-primary save-btn" bindtap="onSave" disabled="{{saving}}">
     {{isEdit ? '保存修改' : '保存'}}
   </button>
 
-  <!-- 乐观保存（S8）：点保存立即成功并跳页，失败不弹层，原因落在对应记录的徽标上 -->
+  <!-- 行政地区修正弹层：仅改文本归属，不修改经纬度 -->
+  <view wx:if="{{showRegionEditor}}" class="mask" catchtouchmove="noop" bindtap="onRegionEditorCancel">
+    <view class="panel fp-card region-panel" catchtap="noop">
+      <view class="panel-title">修改行政地区</view>
+      <input class="panel-input" data-field="province" value="{{regionDraft.province}}" maxlength="30" placeholder="省 / 直辖市" bindinput="onRegionDraftInput" />
+      <input class="panel-input" data-field="city" value="{{regionDraft.city}}" maxlength="30" placeholder="城市" bindinput="onRegionDraftInput" />
+      <input class="panel-input" data-field="district" value="{{regionDraft.district}}" maxlength="30" placeholder="区 / 县" bindinput="onRegionDraftInput" />
+      <input class="panel-input" data-field="cityLabel" value="{{regionDraft.cityLabel}}" maxlength="30" placeholder="足迹归属（例如：嘉兴）" bindinput="onRegionDraftInput" />
+      <view class="fp-hint region-hint">修改地区不会改变地图坐标</view>
+      <view class="panel-btns">
+        <button class="fp-btn-plain panel-btn" bindtap="onRegionEditorCancel">取消</button>
+        <button class="fp-btn-primary panel-btn" bindtap="onRegionEditorSave">保存地区</button>
+      </view>
+    </view>
+  </view>
 </view>

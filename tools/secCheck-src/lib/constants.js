@@ -5,7 +5,7 @@
  */
 const crypto = require('crypto');
 
-const FIELD_WHITELIST = ['note', 'place', 'customTag'];
+const FIELD_WHITELIST = ['note', 'place', 'address', 'province', 'city', 'district', 'cityLabel', 'customTag'];
 const MAX_TEXT_CHARS = 500;
 const MAX_TEXT_BYTES = 2500; // msgSecCheck 单次上限
 const MAX_CUSTOM_TAG_CHARS = 6; // S7-R4：自定义标签新建单个 1~6 字（删除历史 7~10 字存量标签不受限）

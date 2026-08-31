@@ -1,5 +1,5 @@
 <view class="page">
-  <image class="page-bg" src="/assets/bg/ink-bg.png" mode="aspectFill" />
+  <image class="page-bg" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
   <mock-badge />
   <!-- 顶部：年月 + 左右切换 -->
   <view class="cal-head">

@@ -3,7 +3,7 @@
  *
  * 运行：node tools/smoke.js
  * 说明：用内存 mock 替代 wx-server-sdk / ali-oss / @alicloud/pop-core，不依赖真实云环境与 OSS。
- *      覆盖 4 个云函数（login/secCheck/ossSts/delFootprint）的契约关键路径与回归：
+ *      覆盖 5 个云函数（login/secCheck/ossSts/delFootprint/geoResolve）的契约关键路径与回归：
  *        login：建档幂等 + updateProfile（avatarUrl ≤64KB / MIME 仅 jpeg|png|webp /
  *                nickname 去空白 / removeCustomTags 删除标签：只删不加/未命中忽略/删除-only/
  *                删除+改昵称混合/删历史 7~10 字存量标签 / 未知 action 1001 / 回读失败 9000 /
@@ -233,11 +233,16 @@ function makeOss() {
 }
 
 const origLoad = Module._load;
+/** geoResolve 测试用：切换 https 响应（默认 bytes 保持既有用例不变） */
+const httpBehavior = { mode: 'bytes', body: '' };
 /** https mock（S7-R2 适配）：security.js fetchBuffer 经 https.get 拉签名 URL 的缩放图，直接回 mock 字节 */
 const httpsMock = {
-  get(url, cb) {
+  get(url, options, cb) {
+    if (typeof options === 'function') {
+      cb = options; // 兼容 (url, cb) 两参调用（secCheck fetchBuffer）
+    }
     const res = {
-      statusCode: 200,
+      statusCode: httpBehavior.mode === 'geo-http-error' ? 500 : 200,
       resume() {},
       _h: null,
       on(ev, fn) {
@@ -257,7 +262,8 @@ const httpsMock = {
     };
     setImmediate(() => {
       cb(res);
-      if (res._h && res._h.data) res._h.data(Buffer.from('mock-image-bytes'));
+      const payload = httpBehavior.mode === 'geo' ? Buffer.from(httpBehavior.body, 'utf8') : Buffer.from('mock-image-bytes');
+      if (res._h && res._h.data) res._h.data(payload);
       if (res._h && res._h.end) res._h.end();
     });
     return req;
@@ -281,12 +287,13 @@ Module._load = function (request, parent, isMain) {
   return origLoad.apply(this, arguments);
 };
 
-/* ---------------- 载入 4 个云函数 ---------------- */
+/* ---------------- 载入 5 个云函数 ---------------- */
 const ROOT = path.resolve(__dirname, '..', 'cloudfunctions');
 const loginMain = require(path.join(ROOT, 'login', 'index.js')).main;
 const secCheckMain = require(path.join(ROOT, 'secCheck', 'index.js')).main;
 const ossStsMain = require(path.join(ROOT, 'ossSts', 'index.js')).main;
 const delMain = require(path.join(ROOT, 'delFootprint', 'index.js')).main;
+const geoMain = require(path.join(ROOT, 'geoResolve', 'index.js')).main;
 
 /* ---------------- 断言与调用 ---------------- */
 let passed = 0;
@@ -428,7 +435,23 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   ossStore.set(`sec-check/task/${PID}.json`, { content: Buffer.from(JSON.stringify(t1Task)) });
 
   // S7-R4：tags 须命中本人 customTags（预设标签已移除）；此时 customTags=['沙漠']
-  const baseSave = { clientSaveId: CID, date: '2026-08-29', place: '无锡', note: '', tags: ['沙漠'], photos: [{ photoId: PID }] };
+  const baseSave = {
+    clientSaveId: CID,
+    date: '2026-08-29',
+    place: '鼋头渚',
+    lat: 31.54,
+    lng: 120.28,
+    address: '江苏省无锡市滨湖区鼋渚路1号',
+    province: '江苏省',
+    city: '无锡市',
+    district: '滨湖区',
+    adcode: '320211',
+    cityLabel: '无锡',
+    locationSource: 'current',
+    note: '',
+    tags: ['沙漠'],
+    photos: [{ photoId: PID }]
+  };
   const dupPhoto = await call(secCheckMain, { action: 'commitSave', ...baseSave, photos: [{ photoId: PID }, { photoId: PID }] });
   assert('commitSave 重复 photoId → 1001', dupPhoto.code === 1001, dupPhoto);
   const tTooMany = await call(secCheckMain, { action: 'commitSave', ...baseSave, tags: ['沙漠', '星空', '人文', '徒步'] });
@@ -441,6 +464,13 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   const fid = hash(openid, CID);
   assert('commitSave 转正 + 确定性 _id', c1.code === 0 && c1.data.footprintId === fid, c1);
   assert('文档 photos[].key = travelKey', store.footprintDocs.get(fid).photos[0].key === travelKey);
+  assert(
+    '结构化地点字段与坐标写入',
+    store.footprintDocs.get(fid).cityLabel === '无锡' &&
+      store.footprintDocs.get(fid).district === '滨湖区' &&
+      store.footprintDocs.get(fid).lat === 31.54,
+    store.footprintDocs.get(fid)
+  );
   assert('travel 对象已转正', ossStore.has(travelKey));
   const c2 = await call(secCheckMain, { action: 'commitSave', ...baseSave });
   assert('重试幂等命中同 footprintId', c2.code === 0 && c2.data.footprintId === fid, c2);
@@ -510,6 +540,61 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   const timerShape = { Type: 'Timer', TriggerName: 't6h', Time: '2026-08-29T04:00:00Z' };
   const del3 = await call(delMain, timerShape, openid);
   assert('携带 OPENID 的 Timer → 1001', del3.code === 1001, del3);
+
+  console.log('=== geoResolve：逆地址解析 + 降级 ===');
+  const OLD_MAP_KEY = process.env.TENCENT_MAP_KEY;
+  delete process.env.TENCENT_MAP_KEY;
+  const g0 = await call(geoMain, { lat: 30.947, lng: 120.889 });
+  assert('未配置 Key → 9000 MAP_KEY_MISSING（可手动补地区）', g0.code === 9000 && g0.data && g0.data.reason === 'MAP_KEY_MISSING', g0);
+  const g1 = await call(geoMain, { lat: 999, lng: 120 });
+  assert('越界纬度 → 1001', g1.code === 1001, g1);
+  const g2 = await call(geoMain, { lat: 'abc', lng: 120 });
+  assert('非数字坐标 → 1001', g2.code === 1001, g2);
+  const g2b = await call(geoMain, { lat: 30.947, lng: 120.889 }, '');
+  assert('无 OPENID → 1002', g2b.code === 1002, g2b);
+  process.env.TENCENT_MAP_KEY = 'test_map_key';
+  httpBehavior.mode = 'geo';
+  httpBehavior.body = JSON.stringify({
+    status: 0,
+    message: 'query ok',
+    result: {
+      address: '浙江省嘉兴市嘉善县西塘镇西塘古镇景区',
+      formatted_addresses: { recommend: '西塘古镇景区' },
+      address_component: { province: '浙江省', city: '嘉兴市', district: '嘉善县' },
+      ad_info: { adcode: '330421', city: '嘉兴市' },
+      address_reference: { landmark_l2: { title: '西塘古镇' } }
+    }
+  });
+  const g3 = await call(geoMain, { lat: 30.947, lng: 120.889 });
+  assert(
+    '正常解析 → 地点/省市县/adcode 精简返回',
+    g3.code === 0 &&
+      g3.data.place === '西塘古镇' &&
+      g3.data.province === '浙江省' &&
+      g3.data.city === '嘉兴市' &&
+      g3.data.district === '嘉善县' &&
+      g3.data.adcode === '330421' &&
+      g3.data.address.indexOf('西塘') >= 0,
+    g3
+  );
+  assert('cityLabel 去「市」后缀 → 嘉兴', g3.data.cityLabel === '嘉兴', g3);
+  assert('返回不含上游无关字段（仅业务字段）', g3.data && !('message' in g3.data) && !('result' in g3.data), g3);
+  const g4 = await call(geoMain, { lat: 30.947, lng: 120.889, fallbackPlace: '我的自定义地点' });
+  assert('fallbackPlace 优先于推荐地点', g4.code === 0 && g4.data.place === '我的自定义地点', g4);
+  httpBehavior.body = JSON.stringify({ status: 310, message: 'invalid key', result: null });
+  const g5 = await call(geoMain, { lat: 30.947, lng: 120.889 });
+  assert('上游业务错误 → 9000 UPSTREAM_310', g5.code === 9000 && g5.data && /^UPSTREAM_/.test(g5.data.reason), g5);
+  httpBehavior.mode = 'geo-http-error';
+  const g6 = await call(geoMain, { lat: 30.947, lng: 120.889 });
+  assert('http 500 → 9000 NETWORK', g6.code === 9000 && g6.data && g6.data.reason === 'NETWORK', g6);
+  httpBehavior.mode = 'geo';
+  httpBehavior.body = 'not-json';
+  const g7 = await call(geoMain, { lat: 30.947, lng: 120.889 });
+  assert('非 JSON 响应 → 9000 NETWORK', g7.code === 9000 && g7.data && g7.data.reason === 'NETWORK', g7);
+  httpBehavior.mode = 'bytes';
+  httpBehavior.body = '';
+  if (OLD_MAP_KEY) process.env.TENCENT_MAP_KEY = OLD_MAP_KEY;
+  else delete process.env.TENCENT_MAP_KEY;
 
   console.log(`\n结果: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

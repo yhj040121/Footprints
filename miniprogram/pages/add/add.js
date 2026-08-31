@@ -37,6 +37,18 @@ Page(Object.assign({
     photos: [],            // { uid, photoId, tempFilePath, ext, key, url, status, progress, isOld }
     maxPhotos: constants.MAX_PHOTOS,
 
+    // V1.3 位置与地区字段
+    address: '',           // 完整地址（推荐地点+行政区划）
+    province: '',
+    city: '',
+    district: '',
+    adcode: '',
+    cityLabel: '',         // 顶部统计与「足迹归属」展示
+    locationSource: '',    // current | choose | legacy | manual
+    locationResolving: false, // 逆地址解析进行中
+    showRegionEditor: false,  // 行政地区修正弹层
+    regionDraft: { province: '', city: '', district: '', cityLabel: '' },
+
     // 保存状态
     saving: false,
     saveError: null        // { message, retryable }
@@ -176,26 +188,51 @@ Page(Object.assign({
       }
     });
   },
-  // FR-04：wx.chooseLocation 选点回填；取消/拒授权原样保留
-  onGetLocation() {
-    wx.chooseLocation({
+  // V1.3：两条选点路径统一走 resolveLocation 补全地区字段
+  // 「获取当前位置」= wx.getLocation（GCJ-02）+ 逆解析补地区
+  onGetCurrentLocation() {
+    if (this.data.locationResolving) return;
+    this.setData({ locationResolving: true });
+    wx.getLocation({
+      type: 'gcj02',
       success: (res) => {
-        const place = (res.name || res.address || '').slice(0, constants.MAX_PLACE_LEN);
-        if (!place) return;
-        this.markDirty();
-        this._lat = res.latitude;
-        this._lng = res.longitude;
-        this._locatedPlace = place;
-        this._placeCheckSeq += 1;
-        this.setData({ place, placeError: '', placeHint: '', hasCoord: true });
+        this.resolveLocation(res.latitude, res.longitude, '', 'current');
       },
       fail: (err) => {
+        this.setData({ locationResolving: false });
         const msg = (err && err.errMsg) || '';
-        if (/cancel/.test(msg)) return; // 取消选点：表单原样（FR-04 验收 4）
         if (/auth|deny|authorize/.test(msg)) {
           wx.showModal({
             title: '需要定位权限',
-            content: '获取位置被拒绝，可去设置开启；手动输入地点不受影响',
+            content: '获取当前位置被拒绝，可去设置开启，或选择位置',
+            confirmText: '去设置',
+            cancelText: '选位置',
+            confirmColor: '#35322C',
+            success: (r) => { if (r.confirm) wx.openSetting(); else this.onChooseLocation(); }
+          });
+          return;
+        }
+        wx.showToast({ title: '获取当前位置失败', icon: 'none' });
+      }
+    });
+  },
+
+  // 「选择位置」= wx.chooseLocation + 逆解析补地区
+  onChooseLocation() {
+    if (this.data.locationResolving) return;
+    this.setData({ locationResolving: true });
+    wx.chooseLocation({
+      success: (res) => {
+        this.resolveLocation(res.latitude, res.longitude, (res.name || res.address || '').slice(0, 50), 'choose');
+      },
+      fail: (err) => {
+        this.setData({ locationResolving: false });
+        const msg = (err && err.errMsg) || '';
+        if (/cancel/.test(msg)) return; // 取消选点
+        if (/auth|deny|authorize/.test(msg)) {
+          wx.showModal({
+            title: '需要定位权限',
+            content: '位置选择被拒绝，可去设置开启，或手动输入地点',
             confirmText: '去设置',
             cancelText: '手动输入',
             confirmColor: '#35322C',
@@ -203,9 +240,98 @@ Page(Object.assign({
           });
           return;
         }
-        wx.showToast({ title: '获取位置失败，可手动输入', icon: 'none' });
+        wx.showToast({ title: '选择位置失败', icon: 'none' });
       }
     });
+  },
+
+  // 统一入口：拿到坐标 + 系统推荐地点名 → 调 geoResolve 补省市区；解析失败保留坐标手动补地区
+  resolveLocation(lat, lng, fallbackPlace, source) {
+    this.markDirty();
+    this._lat = lat;
+    this._lng = lng;
+    const place = (fallbackPlace || '').slice(0, constants.MAX_PLACE_LEN);
+    this._locatedPlace = place;
+    this._placeCheckSeq += 1;
+    this.setData({
+      place,
+      placeError: '',
+      placeHint: '',
+      hasCoord: true,
+      locationResolving: true,
+      locationSource: source,
+      province: '',
+      city: '',
+      district: '',
+      adcode: '',
+      cityLabel: '',
+      address: ''
+    });
+    request.callFunction('geoResolve', { lat, lng, fallbackPlace: place })
+      .then((resp) => {
+        if (!resp || resp.code !== 0 || !resp.data) {
+          this.setData({ locationResolving: false });
+          return;
+        }
+        if (this._lat !== lat || this._lng !== lng) return;
+        const g = resp.data;
+        const placeFromGeo = g.place || place;
+        this.setData({
+          locationResolving: false,
+          place: placeFromGeo,
+          address: g.address || '',
+          province: g.province || '',
+          city: g.city || '',
+          district: g.district || '',
+          adcode: g.adcode || '',
+          cityLabel: g.cityLabel || ''
+        });
+        this._locatedPlace = placeFromGeo;
+      })
+      .catch(() => {
+        this.setData({ locationResolving: false });
+      });
+  },
+
+  // 「修改地区」弹层（仅改文本，不改坐标）
+  onOpenRegionEditor() {
+    this.setData({
+      showRegionEditor: true,
+      regionDraft: {
+        province: this.data.province || '',
+        city: this.data.city || '',
+        district: this.data.district || '',
+        cityLabel: this.data.cityLabel || ''
+      }
+    });
+  },
+  onRegionEditorCancel() {
+    this.setData({ showRegionEditor: false });
+  },
+  onRegionDraftInput(e) {
+    const field = e.currentTarget.dataset.field;
+    if (!['province', 'city', 'district', 'cityLabel'].includes(field)) return;
+    this.setData({ ['regionDraft.' + field]: e.detail.value });
+  },
+  onRegionEditorSave() {
+    const draft = this.data.regionDraft || {};
+    const city = (draft.city || '').trim();
+    const cityLabel = (draft.cityLabel || '').trim() || city.replace(/市$/, '');
+    this.markDirty();
+    this.setData({
+      province: (draft.province || '').trim(),
+      city,
+      district: (draft.district || '').trim(),
+      cityLabel,
+      locationSource: 'manual',
+      showRegionEditor: false
+    });
+  },
+
+  // 「重新选择」= 重新走选择路径，整组替换坐标与推荐地区
+  onReselectLocation() {
+    this.setData({ locationResolving: false });
+    this.onChooseLocation();
   },
 
   onNoteInput(e) {
@@ -342,6 +468,20 @@ Page(Object.assign({
         noteLen: (fp.note || '').length,
         noteError: '',
         noteHint: '',
+        address: fp.address || '',
+        province: fp.province || '',
+        city: fp.city || '',
+        district: fp.district || '',
+        adcode: fp.adcode || '',
+        cityLabel: fp.cityLabel || '',
+        locationSource: fp.locationSource || (this._lat !== null ? 'legacy' : ''),
+        showRegionEditor: false,
+        regionDraft: {
+          province: fp.province || '',
+          city: fp.city || '',
+          district: fp.district || '',
+          cityLabel: fp.cityLabel || ''
+        },
         photos,
         saveError: null
       });
@@ -399,6 +539,20 @@ Page(Object.assign({
       noteLen: (d.note || '').length,
       noteError: '',
       noteHint: '',
+      address: d.address || '',
+      province: d.province || '',
+      city: d.city || '',
+      district: d.district || '',
+      adcode: d.adcode || '',
+      cityLabel: d.cityLabel || '',
+      locationSource: d.locationSource || (this._lat !== null ? 'legacy' : ''),
+      showRegionEditor: false,
+      regionDraft: {
+        province: d.province || '',
+        city: d.city || '',
+        district: d.district || '',
+        cityLabel: d.cityLabel || ''
+      },
       photos,
       saveError: null
     });
@@ -467,6 +621,20 @@ Page(Object.assign({
       noteLen: (d.note || '').length,
       noteError: '',
       noteHint: '',
+      address: d.address || origin.address || '',
+      province: d.province || origin.province || '',
+      city: d.city || origin.city || '',
+      district: d.district || origin.district || '',
+      adcode: d.adcode || origin.adcode || '',
+      cityLabel: d.cityLabel || origin.cityLabel || '',
+      locationSource: d.locationSource || origin.locationSource || '',
+      showRegionEditor: false,
+      regionDraft: {
+        province: d.province || origin.province || '',
+        city: d.city || origin.city || '',
+        district: d.district || origin.district || '',
+        cityLabel: d.cityLabel || origin.cityLabel || ''
+      },
       photos,
       saveError: null
     });
@@ -522,6 +690,16 @@ Page(Object.assign({
       noteLen: 0,
       noteError: '',
       noteHint: '',
+      address: '',
+      province: '',
+      city: '',
+      district: '',
+      adcode: '',
+      cityLabel: '',
+      locationSource: '',
+      locationResolving: false,
+      showRegionEditor: false,
+      regionDraft: { province: '', city: '', district: '', cityLabel: '' },
       photos: [],
       saveError: null
     });

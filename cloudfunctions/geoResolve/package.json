@@ -1,0 +1,12 @@
+{
+  "name": "geoResolve",
+  "version": "1.0.0",
+  "description": "Footprints reverse geocoder via Tencent Location Service",
+  "main": "index.js",
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "wx-server-sdk": "^2.6.3"
+  }
+}

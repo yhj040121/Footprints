@@ -132,7 +132,7 @@ view, text, input, textarea, button, image, scroll-view, swiper {
 }
 
 /* 水墨山水页背景（S8-R2）：固定铺满，z-index:-1 压在页面纸色之上、内容之下；
-   资产 assets/bg/ink-bg.png 由 tools/svg2png/convert-bg.js 从 pic/ 的 SVG 栅格化（微信 image 不支持 SVG） */
+   资产 assets/bg/page-paper-ink.jpg（竖版全局背景）+ card-paper-ink.png（横版卡片背景） */
 .page-bg {
   position: fixed;
   left: 0;

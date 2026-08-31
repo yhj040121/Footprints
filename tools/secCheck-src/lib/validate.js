@@ -56,6 +56,21 @@ function validateSaveInput(event, oldTags) {
     lng = event.lng;
   }
 
+  function optionalText(field, max) {
+    const value = event[field] === undefined || event[field] === null ? '' : event[field];
+    if (typeof value !== 'string' || value.length > max) throw new BizError(1001);
+    return value.trim();
+  }
+  const address = optionalText('address', 120);
+  const province = optionalText('province', 30);
+  const city = optionalText('city', 30);
+  const district = optionalText('district', 30);
+  const cityLabel = optionalText('cityLabel', 30);
+  const adcode = optionalText('adcode', 12);
+  if (adcode && !/^[0-9A-Za-z-]+$/.test(adcode)) throw new BizError(1001);
+  const locationSource = optionalText('locationSource', 10);
+  if (locationSource && !['current', 'choose', 'legacy', 'manual'].includes(locationSource)) throw new BizError(1001);
+
   // note：≤500 字，缺省 ""
   const note = event.note === undefined || event.note === null ? '' : event.note;
   if (typeof note !== 'string' || note.length > MAX_TEXT_CHARS) throw new BizError(1001);
@@ -96,7 +111,9 @@ function validateSaveInput(event, oldTags) {
     }
   }
 
-  return { date, place, lat, lng, note, tags, photos };
+  return {
+    date, place, lat, lng, address, province, city, district, adcode, cityLabel, locationSource, note, tags, photos
+  };
 }
 
 /**

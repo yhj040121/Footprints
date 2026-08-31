@@ -272,3 +272,71 @@
 .save-fail-hint {
   text-align: center;
 }
+
+/* ---------- V1.3 地点卡片（获取位置 / 选择位置并列 + 已选显示） ---------- */
+.location-card { gap: 16rpx; }
+.location-title { margin-bottom: 0; }
+.location-name-input {
+  height: 88rpx;
+  padding: 0 24rpx;
+  border-radius: var(--radius-md);
+  background: rgb(255 254 249 / 70%);
+  border: 1rpx solid rgb(92 84 71 / 14%);
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+}
+.location-empty-copy {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  padding: 8rpx 24rpx;
+}
+.location-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 12rpx 24rpx;
+  border-radius: var(--radius-md);
+  background: rgb(92 84 71 / 6%);
+  border: 1rpx solid rgb(92 84 71 / 14%);
+}
+.region-line {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+}
+.city-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+.location-status {
+  min-height: 28rpx;
+  padding: 0 4rpx;
+}
+.location-actions {
+  display: flex;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+.location-actions--primary {
+  margin-top: 4rpx;
+}
+.loc-action {
+  flex: 1;
+  min-width: 0;
+  min-height: 72rpx;
+  padding: 0 24rpx;
+  font-size: var(--text-sm);
+}
+
+/* ---------- 行政地区修正弹层 ---------- */
+.region-panel { gap: 16rpx; padding: 24rpx; }
+.panel-input {
+  height: 80rpx;
+  padding: 0 20rpx;
+  border-radius: var(--radius-md);
+  background: rgb(255 254 249 / 70%);
+  border: 1rpx solid rgb(92 84 71 / 14%);
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+}
+.region-hint { padding: 0 4rpx; }

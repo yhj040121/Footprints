@@ -1,14 +1,28 @@
 .card {
+  position: relative;
   display: flex;
   gap: 24rpx;
   padding: 24rpx;
-  /* 组件样式隔离：app.wxss 进不来，卡片表面在此自写（否则透明卡会透出左滑操作层） */
+  min-height: 224rpx;
+  overflow: hidden;
   background: #FFFEF9;
-  border: 1rpx solid #E2DACA;
+  border: 0;
   border-radius: 24rpx;
 }
 
+/* V1.3：横版水墨背景层，scaleToFill 拉伸铺满整个卡片 */
+.card-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .cover {
+  position: relative;
+  z-index: 1;
   width: 200rpx;
   height: 200rpx;
   border-radius: 16rpx;
@@ -35,6 +49,8 @@
 }
 
 .body {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -49,6 +65,7 @@
   font-size: 30rpx;
   font-weight: 600;
   color: #35322C;
+  font-family: "STKaiti", "KaiTi", "PingFang SC", serif;
 }
 
 .place-text {
@@ -61,14 +78,12 @@
   color: #6E685C;
   font-size: 26rpx;
   line-height: 1.5;
-  /* FR-08：备注恰好 2 行截断 */
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
-/* 仅展示失败状态；正常后台保存不显示过程状态 */
 .draft-badge {
   margin-top: auto;
   align-self: flex-start;

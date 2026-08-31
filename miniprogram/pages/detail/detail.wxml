@@ -1,5 +1,6 @@
 <!-- detail 足迹详情页：日期大标题 / 地点行 / 标签 chips / 备注全文 / 照片三列网格 / 底部固定操作条 -->
 <view class="page">
+  <image class="page-bg" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
   <mock-badge />
   <!-- 加载中 -->
   <view class="state" wx:if="{{loading}}">

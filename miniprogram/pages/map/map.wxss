@@ -1,4 +1,4 @@
-/* 足迹地图页样式 —— 复用 app.wxss 变量与 fp-* 通用类；无阴影、仅浅色 */
+/* 足迹地图页 V1.3：原生 <map> + 水墨装饰层 + 顶部统计 + callout 标签 + 底部详情卡片 */
 .map-page {
   position: relative;
   height: 100vh;
@@ -10,34 +10,98 @@
   height: 100%;
 }
 
-/* 图例说明：顶部居中浅色小条 */
-.legend {
+/* 水墨装饰层：放在地图上方但不拦截手势 */
+.map-wash {
   position: absolute;
-  top: var(--space-4);
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 86%;
-  padding: 8rpx 24rpx;
-  border-radius: var(--radius-full);
-  border: 1rpx solid var(--color-border-subtle);
-  background: var(--color-bg-surface);
-  text-align: center;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  opacity: 0.18;
+  pointer-events: none;
+  z-index: 1;
 }
 
-/* 无含坐标记录时的轻提示 */
-.empty-hint {
+/* 顶部统计栏 */
+.map-stats {
   position: absolute;
-  top: 40%;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 12rpx 32rpx;
+  top: var(--space-3);
+  left: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  padding: 10rpx 16rpx;
+  border-radius: 24rpx;
+  background: rgb(250 247 239 / 92%);
+  border: 1rpx solid rgb(92 84 71 / 14%);
+  font-size: 24rpx;
+  color: var(--color-text-primary);
+  z-index: 50;
+}
+.stat-item { display: inline-flex; align-items: center; gap: 6rpx; }
+.stat-dot { color: var(--color-text-muted); }
+.stat-recent { color: var(--color-text-secondary); }
+.route-info {
+  margin-left: auto;
+  width: 40rpx; height: 40rpx; padding: 0;
   border-radius: var(--radius-full);
-  border: 1rpx solid var(--color-border-subtle);
-  background: var(--color-bg-surface);
+  background: rgb(92 84 71 / 10%);
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 40rpx;
+}
+.route-info::after { border: 0; }
+
+/* Marker callout：地点名 + 日期·照片数；左右交替偏移防重叠 */
+.marker-callout {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 22rpx;
+  background: rgb(252 249 241 / 96%);
+  border: 1rpx solid rgb(92 84 71 / 18%);
+  font-size: 22rpx;
+  color: var(--color-text-primary);
   white-space: nowrap;
 }
+.marker-callout--left { flex-direction: row-reverse; }
+.marker-callout--selected { background: rgb(250 247 239 / 98%); }
+.marker-photo {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  border: 2rpx solid #E2DACA;
+  background: #EFE9DC;
+}
+.marker-photo--fallback { opacity: 0.7; }
+.marker-callout--selected .marker-photo { width: 80rpx; height: 80rpx; border-color: #3E3931; }
+.marker-copy { display: flex; flex-direction: column; gap: 2rpx; }
+.marker-place { font-weight: 600; font-size: 24rpx; color: #35322C; }
+.marker-meta { font-size: 20rpx; color: var(--color-text-muted); }
 
-/* 「定位我」圆形按钮：右下角，浮于卡片之上；tabBar 高 164rpx，故底部再让出 */
+/* 空态 / 错误态 */
+.empty-hint {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 24rpx 36rpx;
+  border-radius: 28rpx;
+  background: rgb(250 247 239 / 96%);
+  border: 1rpx solid rgb(92 84 71 / 14%);
+  z-index: 50;
+  text-align: center;
+}
+.empty-title { font-size: 28rpx; color: var(--color-text-primary); font-weight: 500; }
+.empty-desc { font-size: 22rpx; color: var(--color-text-muted); }
+
+/* 「定位我」圆形按钮 */
 .locate-btn {
   position: absolute;
   right: var(--space-4);
@@ -46,7 +110,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6rpx;
+  gap: 4rpx;
   width: 112rpx;
   height: 112rpx;
   padding: 0;
@@ -55,88 +119,96 @@
   background: var(--color-bg-surface);
   box-shadow: none;
   line-height: 1;
+  z-index: 50;
 }
 .locate-btn::after { border: none; }
 .locate-btn--hover { background: var(--color-bg-hover); }
-/* 卡片展开时上移，避免与卡片重叠 */
 .locate-btn--up {
-  bottom: calc(440rpx + env(safe-area-inset-bottom));
+  bottom: calc(480rpx + env(safe-area-inset-bottom));
 }
+.locate-icon-img { width: 40rpx; height: 40rpx; }
+.locate-text { font-size: 20rpx; color: var(--color-text-primary); }
 
-.locate-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: var(--radius-full);
-  border: 3rpx solid var(--color-text-primary);
-}
-.locate-dot {
-  width: 10rpx;
-  height: 10rpx;
-  border-radius: var(--radius-full);
-  background: var(--color-text-primary);
-}
-.locate-text {
-  font-size: 20rpx;
-  color: var(--color-text-primary);
-}
-
-/* 底部记录卡片：左缩略图 + 右文字，浮于 tabBar 之上 */
+/* 底部详情卡片 */
 .map-card {
   position: absolute;
   left: var(--space-4);
   right: var(--space-4);
   bottom: calc(200rpx + env(safe-area-inset-bottom));
   display: flex;
-  align-items: center;
-  padding: var(--space-3);
-  gap: var(--space-3);
+  align-items: stretch;
+  padding: 16rpx;
+  gap: 16rpx;
+  background: var(--color-bg-surface);
+  border-radius: 28rpx;
+  z-index: 50;
 }
-
 .card-thumb {
   flex: none;
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
+  width: 180rpx;
+  height: 200rpx;
+  border-radius: 18rpx;
+  background: #E9E2D5;
 }
-
 .card-body {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
+  gap: 8rpx;
 }
+.card-headline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+.card-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4rpx; }
 .card-place {
-  font-size: var(--text-base);
-  color: var(--color-text-primary);
-  font-weight: 500;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: #35322C;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.card-note {
-  font-size: var(--text-sm);
+.card-region {
+  font-size: 22rpx;
   color: var(--color-text-secondary);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-
-/* 关闭按钮：触控目标 ≥88rpx */
-.card-close {
+.card-meta { font-size: 22rpx; color: var(--color-text-muted); }
+.view-record {
   flex: none;
-  align-self: flex-start;
+  width: 120rpx;
+  height: 56rpx;
+  padding: 0;
+  margin: 0;
+  border-radius: 12rpx 26rpx 12rpx 26rpx;
+  background: var(--color-action-bg);
+  color: var(--color-action-text);
+  font-size: 24rpx;
+  line-height: 56rpx;
+}
+.view-record::after { border: 0; }
+.preview-row {
+  display: flex;
+  gap: 8rpx;
+  margin-top: 4rpx;
+}
+.preview-img, .preview-more {
+  width: 70rpx;
+  height: 64rpx;
+  border-radius: 8rpx;
+  background: #E7E0D4;
+}
+.preview-more {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 88rpx;
-  height: 88rpx;
-  margin: -16rpx -16rpx 0 0;
-  font-size: var(--text-xl);
-  color: var(--color-text-muted);
+  font-size: 22rpx;
+  color: var(--color-text-secondary);
+  background: rgb(92 84 71 / 8%);
 }

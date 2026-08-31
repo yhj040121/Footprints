@@ -155,7 +155,7 @@ var require_push = __commonJS({
 var require_constants = __commonJS({
   "tools/secCheck-src/lib/constants.js"(exports2, module2) {
     var crypto = require("crypto");
-    var FIELD_WHITELIST = ["note", "place", "customTag"];
+    var FIELD_WHITELIST = ["note", "place", "address", "province", "city", "district", "cityLabel", "customTag"];
     var MAX_TEXT_CHARS = 500;
     var MAX_TEXT_BYTES = 2500;
     var MAX_CUSTOM_TAG_CHARS = 6;
@@ -562,6 +562,20 @@ var require_validate = __commonJS({
         lat = event.lat;
         lng = event.lng;
       }
+      function optionalText(field, max) {
+        const value = event[field] === void 0 || event[field] === null ? "" : event[field];
+        if (typeof value !== "string" || value.length > max) throw new BizError2(1001);
+        return value.trim();
+      }
+      const address = optionalText("address", 120);
+      const province = optionalText("province", 30);
+      const city = optionalText("city", 30);
+      const district = optionalText("district", 30);
+      const cityLabel = optionalText("cityLabel", 30);
+      const adcode = optionalText("adcode", 12);
+      if (adcode && !/^[0-9A-Za-z-]+$/.test(adcode)) throw new BizError2(1001);
+      const locationSource = optionalText("locationSource", 10);
+      if (locationSource && !["current", "choose", "legacy", "manual"].includes(locationSource)) throw new BizError2(1001);
       const note = event.note === void 0 || event.note === null ? "" : event.note;
       if (typeof note !== "string" || note.length > MAX_TEXT_CHARS) throw new BizError2(1001);
       const rawTags = event.tags === void 0 || event.tags === null ? [] : event.tags;
@@ -590,7 +604,22 @@ var require_validate = __commonJS({
           pidSeen.add(p.photoId);
         }
       }
-      return { date, place, lat, lng, note, tags, photos };
+      return {
+        date,
+        place,
+        lat,
+        lng,
+        address,
+        province,
+        city,
+        district,
+        adcode,
+        cityLabel,
+        locationSource,
+        note,
+        tags,
+        photos
+      };
     }
     async function validateTags(tags, openid) {
       const custom = new Set(await getUserCustomTags(openid));
@@ -685,13 +714,16 @@ var require_commit = __commonJS({
       }
       const input = validateSaveInput(event);
       await validateTags(input.tags, openid);
-      await textFinalCheck(
-        [
-          { field: "place", content: input.place },
-          { field: "note", content: input.note }
-        ].concat(input.tags.map((t) => ({ field: "customTag", content: t }))),
-        openid
-      );
+      const saveTexts = [
+        { field: "place", content: input.place },
+        { field: "note", content: input.note },
+        { field: "address", content: input.address },
+        { field: "province", content: input.province },
+        { field: "city", content: input.city },
+        { field: "district", content: input.district },
+        { field: "cityLabel", content: input.cityLabel }
+      ].filter((item) => item.content);
+      await textFinalCheck(saveTexts.concat(input.tags.map((t) => ({ field: "customTag", content: t }))), openid);
       let resolved = [];
       if (input.photos.length) resolved = await verifyPhotos(input.photos, openid, client);
       if (resolved.length) await promotePhotos(resolved, client);
@@ -706,6 +738,13 @@ var require_commit = __commonJS({
             place: input.place,
             lat: input.lat,
             lng: input.lng,
+            address: input.address,
+            province: input.province,
+            city: input.city,
+            district: input.district,
+            adcode: input.adcode,
+            cityLabel: input.cityLabel,
+            locationSource: input.locationSource,
             note: input.note,
             tags: input.tags,
             photos: resolved.map((r) => ({ key: r.travelKey })),
@@ -761,6 +800,9 @@ var require_commit = __commonJS({
       const diffItems = [];
       if (input.place !== (fp.place || "")) diffItems.push({ field: "place", content: input.place });
       if (input.note !== (fp.note || "")) diffItems.push({ field: "note", content: input.note });
+      ["address", "province", "city", "district", "cityLabel"].forEach((field) => {
+        if (input[field] && input[field] !== (fp[field] || "")) diffItems.push({ field, content: input[field] });
+      });
       const oldTags = new Set(fp.tags || []);
       for (const t of input.tags) {
         if (oldTags.has(t)) continue;
@@ -803,6 +845,13 @@ var require_commit = __commonJS({
             place: input.place,
             lat: input.lat,
             lng: input.lng,
+            address: input.address,
+            province: input.province,
+            city: input.city,
+            district: input.district,
+            adcode: input.adcode,
+            cityLabel: input.cityLabel,
+            locationSource: input.locationSource,
             note: input.note,
             tags: input.tags,
             photos: newKeys.map((k) => ({ key: k }))

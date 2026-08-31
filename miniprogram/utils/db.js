@@ -119,7 +119,7 @@ function listWithLocation(options) {
     const all = [];
     const step = () => db().collection(COLLECTION)
       .where({ _openid: '{openid}', lat: _.exists(true) })
-      .field({ date: true, place: true, lat: true, lng: true, note: true, photos: true, createdAt: true })
+      .field({ date: true, place: true, lat: true, lng: true, address: true, province: true, city: true, district: true, adcode: true, cityLabel: true, locationSource: true, note: true, photos: true, createdAt: true })
       .orderBy('date', 'asc')
       .orderBy('createdAt', 'asc')
       .skip(all.length)

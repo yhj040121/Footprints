@@ -184,6 +184,14 @@ module.exports = {
       lng: typeof this._lng === 'number' ? this._lng : null,
       note: this.data.note || '',
       tags: [], // S8：标签体系下架，重写后再接入
+      // V1.3：地点与地区字段随快照保存（commitSave 时一起提交）
+      address: this.data.address || '',
+      province: this.data.province || '',
+      city: this.data.city || '',
+      district: this.data.district || '',
+      adcode: this.data.adcode || '',
+      cityLabel: this.data.cityLabel || '',
+      locationSource: this.data.locationSource || (this._lat !== null ? 'legacy' : ''),
       photos: this.data.photos
         .filter((p) => !p.isOld)
         .map((p) => ({
@@ -232,6 +240,14 @@ module.exports = {
       payload.lat = snap.lat;
       payload.lng = snap.lng;
     }
+    // V1.3 地点与地区字段（修改地区文本不动坐标，重新选择才更新；缺省为旧记录兼容）
+    if (snap.address) payload.address = snap.address;
+    if (snap.province) payload.province = snap.province;
+    if (snap.city) payload.city = snap.city;
+    if (snap.district) payload.district = snap.district;
+    if (snap.adcode) payload.adcode = snap.adcode;
+    if (snap.cityLabel) payload.cityLabel = snap.cityLabel;
+    if (snap.locationSource) payload.locationSource = snap.locationSource;
     await request.callFunction('secCheck', Object.assign({
       action: 'commitSave',
       clientSaveId: ctx.clientSaveId
@@ -348,6 +364,14 @@ module.exports = {
       payload.lat = snap.lat;
       payload.lng = snap.lng;
     }
+    // V1.3 地点与地区字段（编辑链同 commitSave 口径；修改地区/重新选择均生效）
+    if (snap.address) payload.address = snap.address;
+    if (snap.province) payload.province = snap.province;
+    if (snap.city) payload.city = snap.city;
+    if (snap.district) payload.district = snap.district;
+    if (snap.adcode) payload.adcode = snap.adcode;
+    if (snap.cityLabel) payload.cityLabel = snap.cityLabel;
+    if (snap.locationSource) payload.locationSource = snap.locationSource;
     await this.commitEditSnap(payload, snap, ctx);
   },
 
