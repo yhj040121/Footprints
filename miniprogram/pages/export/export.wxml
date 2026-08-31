@@ -9,19 +9,14 @@
   <!-- 顶部筛选 -->
   <view class="filter">
     <view class="filter-row">
-      <view class="chip {{filterPlace ? 'chip--active' : ''}}" hover-class="chip--hover" bindtap="onPlaceFilterTap">
-        <text class="chip-icon pin">⌖</text>
-        <text class="chip-text">{{placeLabel}}</text>
-        <text class="chip-caret">▾</text>
+      <view class="chip-wrap {{filterPlace ? 'chip-wrap--on' : ''}}" hover-class="chip-wrap--hover" bindtap="onPlaceFilterTap">
+        <image class="chip-img chip-img--wide" src="/assets/icons/chip-place.png" mode="heightFix" />
       </view>
-      <view class="chip {{filterRange ? 'chip--active' : ''}}" hover-class="chip--hover" bindtap="onRangeFilterTap">
-        <text class="chip-icon cal">▦</text>
-        <text class="chip-text">{{rangeLabel}}</text>
-        <text class="chip-caret">▾</text>
+      <view class="chip-wrap {{filterRange ? 'chip-wrap--on' : ''}}" hover-class="chip-wrap--hover" bindtap="onRangeFilterTap">
+        <image class="chip-img chip-img--wide" src="/assets/icons/chip-time.png" mode="heightFix" />
       </view>
-      <view class="chip chip--icon" hover-class="chip--hover" bindtap="onResetTap">
-        <text class="chip-icon reset">↺</text>
-        <text class="chip-text">重置</text>
+      <view class="chip-wrap chip-wrap--round" hover-class="chip-wrap--hover" bindtap="onResetTap">
+        <image class="chip-img chip-img--round" src="/assets/icons/chip-reset.png" mode="heightFix" />
       </view>
     </view>
   </view>

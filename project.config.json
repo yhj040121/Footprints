@@ -8,7 +8,8 @@
         "ignore": [
             { "type": "file", "value": "miniprogram/assets/bg/2.png" },
             { "type": "file", "value": "miniprogram/assets/bg/3.png" },
-            { "type": "file", "value": "miniprogram/assets/bg/card-paper-ink1.png" }
+            { "type": "file", "value": "miniprogram/assets/bg/card-paper-ink1.png" },
+            { "type": "file", "value": "miniprogram/assets/bg/page-paper-ink-large.png" }
         ],
         "include": []
     },

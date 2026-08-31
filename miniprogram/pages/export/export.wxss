@@ -15,43 +15,39 @@
 .filter-row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
-.chip {
+/* chip 容器：仅负责点击 + 高亮态；图片自带水墨背景与圆角 */
+.chip-wrap {
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
-  gap: 8rpx;
-  min-height: 64rpx;
-  padding: 8rpx 24rpx;
-  border-radius: var(--radius-full);
-  background: var(--color-bg-surface);
-  border: 1rpx solid var(--color-border-control);
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-  overflow: hidden;
+  justify-content: center;
+  min-height: 88rpx;          /* 触控目标 ≥88rpx */
+  cursor: pointer;
 }
-.chip--hover { background: var(--color-bg-hover); }
-.chip--active {
-  background: var(--color-action-bg);
-  border-color: var(--color-action-bg);
-  color: var(--color-action-text);
+.chip-wrap--round {
+  min-height: 0;
 }
-.chip--icon { padding-right: 20rpx; }
-.chip-icon {
-  font-size: 28rpx;
-  color: inherit;
-  line-height: 1;
+.chip-wrap--hover { transform: translateY(2rpx); }
+.chip-wrap--on .chip-img {
+  filter: brightness(0.86) saturate(0.85);
 }
-.chip-icon.pin { font-weight: 600; }
-.chip-icon.cal { font-size: 30rpx; }
-.chip-icon.reset { font-size: 32rpx; }
-.chip-text {
-  max-width: 240rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* 图片本身：height 决定显示高度，width 自动按比例 */
+.chip-img {
+  display: block;
+  height: 80rpx;
+  width: auto;
 }
-.chip-caret { font-size: 22rpx; opacity: 0.85; }
+.chip-img--wide {
+  /* 占位：横长 chip 占 240rpx 宽左右，实际由 heightFix 按比例算 */
+}
+.chip-img--round {
+  height: 100rpx;
+}
 
 /* ---------- 主体 ---------- */
 .body {
