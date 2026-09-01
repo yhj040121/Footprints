@@ -20,9 +20,7 @@
 /* 长条 chip：宽高比 3:1（与 chip-place.png / chip-time.png 素材一致），动态 label 居中 */
 .chip {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: 276rpx;
   height: 92rpx;
   flex-shrink: 0;
@@ -46,19 +44,8 @@
   height: 100%;
   z-index: 0;
   pointer-events: none;
-}
-.chip__label {
-  position: relative;
-  z-index: 2;
-  padding: 0 90rpx;  /* 左右留出图片内边距，避免压到图标 / 箭头 */
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #302D28;
-  line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
+  /* multiply：白底 × 米色页面 = 米色（白底消失），黑墨 × 米色 = 黑墨（保留水墨） */
+  mix-blend-mode: multiply;
 }
 /* 重置墨圈：1:1 圆形 */
 .chip--reset {

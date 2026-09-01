@@ -6,16 +6,14 @@
   <image class="page-bg" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
   <mock-badge />
 
-  <!-- 顶部筛选（§16：完整水墨素材 chip + 墨圈重置；动态文字覆盖在图片中央） -->
+  <!-- 顶部筛选（§16：完整水墨素材 chip + 墨圈重置；素材自带文字，无动态 label） -->
   <view class="filter">
     <view class="filter-row">
       <view class="chip chip--place {{filterPlace ? 'chip--on' : ''}}" hover-class="chip--hover" bindtap="onPlaceFilterTap" aria-label="筛选地点">
         <image class="chip__bg" src="/assets/icons/chip-place.png" mode="scaleToFill" />
-        <text class="chip__label">{{placeLabel}}</text>
       </view>
       <view class="chip chip--time {{filterRange ? 'chip--on' : ''}}" hover-class="chip--hover" bindtap="onRangeFilterTap" aria-label="筛选时间">
         <image class="chip__bg" src="/assets/icons/chip-time.png" mode="scaleToFill" />
-        <text class="chip__label">{{rangeLabel}}</text>
       </view>
       <view class="chip chip--reset" hover-class="chip--hover" bindtap="onResetTap" aria-label="重置筛选">
         <image class="chip__bg" src="/assets/icons/chip-reset.png" mode="scaleToFill" />
