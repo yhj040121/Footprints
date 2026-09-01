@@ -17,26 +17,19 @@
   align-items: center;
   gap: 16rpx;
 }
-/* 长条 chip：宽高比 3:1（与 chip-place.png / chip-time.png 素材一致），动态 label 居中 */
+/* 长条 chip：宽高比 3:1（与 chip-place.png / chip-time.png 素材一致） */
 .chip {
   position: relative;
   display: block;
   width: 276rpx;
   height: 92rpx;
   flex-shrink: 0;
-  overflow: hidden;
+  /* 不加 overflow: hidden —— 否则会创建 stacking context，导致 chip__bg 的 mix-blend-mode: multiply
+     只与 chip 内部透明背景混合，白底乘以透明 = 白底保留，水墨白底去不掉。
+     去掉后 mix-blend-mode 才能跨出 chip 与下层米色页面混合：白×米色=米色（白底消失）。 */
 }
 .chip--time { width: 276rpx; }
 .chip--hover { opacity: 0.85; }
-/* 选中态：图片保持，加一层 8% 暗色蒙层提示 */
-.chip--on::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(48, 45, 40, 0.08);
-  z-index: 1;
-  pointer-events: none;
-}
 .chip__bg {
   position: absolute;
   inset: 0;
