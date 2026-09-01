@@ -37,8 +37,7 @@
   height: 100%;
   z-index: 0;
   pointer-events: none;
-  /* multiply：白底 × 米色页面 = 米色（白底消失），黑墨 × 米色 = 黑墨（保留水墨） */
-  mix-blend-mode: multiply;
+  /* 素材已是真透明 PNG，直接显示即可，无需 mix-blend-mode */
 }
 /* 重置墨圈：1:1 圆形 */
 .chip--reset {
