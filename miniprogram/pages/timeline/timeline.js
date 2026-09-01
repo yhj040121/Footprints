@@ -12,6 +12,12 @@ const pendingDeletions = require('../../utils/pending-deletions');
 
 const STALE_DRAFT_MS = 90 * 1000;
 
+function formatLongDate(value) {
+  const parts = String(value || '').split('-');
+  if (parts.length !== 3) return value || '';
+  return (+parts[0]) + ' 年 ' + (+parts[1]) + ' 月 ' + (+parts[2]) + ' 日';
+}
+
 function applyGrouping(list) {
   let prevDate = '';
   list.forEach((item) => {
@@ -107,6 +113,7 @@ Page({
         coverUrl: validCover ? cached.url : localCover,
         dateYear: (rec.date || '').slice(0, 4),
         dateMd: (rec.date || '').slice(5).replace('-', '.'),
+        dateTextLong: formatLongDate(rec.date),
         showDate: false,
         isDraft: false,
         draftStatus: '',
@@ -131,6 +138,7 @@ Page({
       coverUrl: first && first.tempFilePath ? first.tempFilePath : '',
       dateYear: (d.date || '').slice(0, 4),
       dateMd: (d.date || '').slice(5).replace('-', '.'),
+      dateTextLong: formatLongDate(d.date),
       showDate: false,
       isDraft: true,
       draftStatus: d.status || 'syncing',
@@ -144,7 +152,7 @@ Page({
     const draftsList = drafts.listAll()
       .filter((d) => !d.editId && (d.status === 'syncing' || d.status === 'failed'))
       .map((d) => this.decorateDraft(d));
-    if (!draftsList.length) return list;
+    if (!draftsList.length) return applyGrouping(list);
     const seen = {};
     list.forEach((it) => { seen[it._id] = true; });
     const merged = list.concat(draftsList.filter((d) => !seen[d._id]));

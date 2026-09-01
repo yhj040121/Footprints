@@ -1,5 +1,4 @@
-<!-- 时间线 tab 页（V1.3）：窄时间线只保留节点，日期信息留在记录详情；
-   卡片直接进入详情页；导出/删除入口已移除（用户拍板）。 -->
+<!-- 时间线：日期分组 + 竖向墨线 + 横版水墨记录卡；卡片直接进入详情，无选择框。 -->
 <view class="page" bindtap="onListTap">
   <image class="page-bg" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
   <mock-badge />
@@ -34,12 +33,15 @@
           </view>
         </view>
 
-        <view class="card-wrap">
-          <footprint-card
-            record="{{item}}"
-            cover-url="{{item.coverUrl}}"
-            bind:tap="onCardTap"
-          />
+        <view class="tl-content">
+          <view wx:if="{{item.showDate}}" class="tl-date">{{item.dateTextLong}}</view>
+          <view class="card-wrap">
+            <footprint-card
+              record="{{item}}"
+              cover-url="{{item.coverUrl}}"
+              bind:tap="onCardTap"
+            />
+          </view>
         </view>
       </view>
     </view>

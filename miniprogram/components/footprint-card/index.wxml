@@ -1,5 +1,5 @@
 <view class="fp-card card" bindtap="onTap">
-  <image class="card-ink-edge" src="/assets/ink/card-edge-right.png" mode="aspectFill" />
+  <image class="card-bg" src="/assets/bg/card-paper-ink.png" mode="scaleToFill" />
   <view class="cover">
     <image
       wx:if="{{coverUrl}}"
@@ -19,4 +19,5 @@
       <text>{{record.draftError || '未保存成功'}} · 点击处理</text>
     </view>
   </view>
+  <text class="card-arrow" aria-hidden="true">›</text>
 </view>

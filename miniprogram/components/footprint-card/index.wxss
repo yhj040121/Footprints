@@ -1,5 +1,4 @@
-/* 通用足迹卡（需求文档 §38）：干净信息区，不再铺 card-paper-ink.png；
-   最多允许右下角出现极淡山形；地点名称用系统字体 Semibold（§8.2 禁楷体） */
+/* 通用足迹卡：横版水墨背景同时用于时间轴与日历记录列表。 */
 .card {
   position: relative;
   display: flex;
@@ -7,18 +6,19 @@
   padding: 24rpx;
   min-height: 224rpx;
   overflow: hidden;
+  background: #FFFEF9;
+  border: 0;
+  border-radius: 24rpx;
 }
 
-/* 右下角极淡山形（Ink Surface 边角装饰，90%+ 区域保持干净） */
-.card-ink-edge {
+/* 用户提供的横版水墨背景，完整铺满卡片。 */
+.card-bg {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 180rpx;
-  height: 140rpx;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.45;
 }
 
 .cover {
@@ -57,6 +57,7 @@
   display: flex;
   flex-direction: column;
   gap: 12rpx;
+  padding-right: 34rpx;
 }
 
 /* 地点名称：系统字体 Semibold，不用楷体（§38.2） */
@@ -97,4 +98,16 @@
   background: rgba(168, 71, 55, 0.08);
   border: 1rpx solid rgba(168, 71, 55, 0.22);
   border-radius: var(--radius-full);
+}
+
+.card-arrow {
+  position: absolute;
+  z-index: 1;
+  right: 22rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #302D28;
+  font-size: 50rpx;
+  font-weight: 500;
+  line-height: 1;
 }

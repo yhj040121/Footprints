@@ -1,5 +1,4 @@
-/* 时间线（V1.3）：窄时间线只保留节点，日期信息留在记录详情；
-   卡片直接进入详情页；左滑/长按/导出弹层入口已下线 */
+/* 时间线：完整日期、细墨线和横版水墨记录卡；无左滑、长按或选择框。 */
 
 .page {
   min-height: 100vh;
@@ -81,7 +80,27 @@
   box-shadow: 0 0 0 5rpx rgb(246 242 233 / 72%);
 }
 
-.card-wrap { flex: 1; min-width: 0; border-radius: var(--radius-lg); }
+.tl-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.tl-date {
+  min-height: 48rpx;
+  display: flex;
+  align-items: flex-start;
+  padding: 0 0 10rpx 8rpx;
+  color: #3F3A32;
+  font-size: 27rpx;
+  font-weight: 500;
+  letter-spacing: 2rpx;
+  line-height: 1.4;
+}
+
+.card-wrap {
+  min-width: 0;
+  border-radius: var(--radius-lg);
+}
 
 .footer {
   text-align: center;

@@ -46,6 +46,10 @@ let calendarPage = null;
 global.Page = (definition) => { calendarPage = definition; };
 require('../miniprogram/pages/calendar/calendar');
 delete global.Page;
+let timelinePage = null;
+global.Page = (definition) => { timelinePage = definition; };
+require('../miniprogram/pages/timeline/timeline');
+delete global.Page;
 
 (async () => {
   const recent = {
@@ -100,6 +104,17 @@ delete global.Page;
   assert.strictEqual(calendarContext.data.cells[0].thumb, 'wxfile://recent.jpg');
   assert.strictEqual(calendarContext.data.cells[0].loading, false);
   assert.strictEqual(calendarContext.data.dayRecords[0].coverUrl, 'wxfile://recent.jpg');
+
+  // 无草稿时也必须完成日期分组，并输出时间轴需要的完整中文日期。
+  const timelineContext = Object.assign({ _coverCache: {} }, timelinePage);
+  const timelineItems = timelineContext.decorateList([
+    recent,
+    Object.assign({}, recent, { _id: 'fp_same_day', createdAt: recent.createdAt - 1 })
+  ]);
+  const timelineGrouped = timelineContext.mergeDrafts(timelineItems);
+  assert.strictEqual(timelineGrouped[0].showDate, true);
+  assert.strictEqual(timelineGrouped[0].dateTextLong, '2026 年 9 月 1 日');
+  assert.strictEqual(timelineGrouped[1].showDate, false);
 
   // 新照片的正式 key 无法由客户端预知：客户端数据库即使短暂返回旧快照，也不能覆盖本地新图。
   dbRows = [Object.assign({}, recent, { photos: [{ key: 'travel/2026/09/01/aaaaaaaaaaaaaaaa.jpg' }] })];
