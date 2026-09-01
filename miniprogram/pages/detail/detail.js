@@ -129,6 +129,7 @@ Page({
     this.loadedOnce = false;
     this._photoVersion = 0;
     this._layoutVersion = 0;
+    this._loadSeq = 0; // loadDetail 轮次（S10：延迟重查与并发加载交错时丢弃旧结果）
     this._photoItems = [];
     if (!this.fpId) {
       this.setData(Object.assign({ loading: false, notFound: true }, emptyPhotoPatch()));
@@ -142,12 +143,28 @@ Page({
     if (this.loadedOnce) this.loadDetail();
   },
 
+  onUnload() {
+    // 作废在途加载与延迟重查（S10）：页面销毁后不再 setData
+    this._loadSeq = (this._loadSeq || 0) + 1;
+  },
+
   loadDetail(options) {
+    // 加载序号：延迟重查与并发 loadDetail（onShow 刷新等）交错时，旧结果不再落地
+    const seq = (this._loadSeq = (this._loadSeq || 0) + 1);
     this.setData({ loading: !this.data.fp, photoFailed: false, networkError: false });
     db.getFootprint(this.fpId, options)
       .then((fp) => {
+        if (seq !== this._loadSeq) return;
         this.loadedOnce = true;
         if (!fp) {
+          // S10：查无记录且非本人删除（pendingDeletions）→ 大概率是新建/刷新后数据库
+          // 点查的可见性瞬态窗口。保持加载态，1.2s 后强制重查一次，仍查无才判定「记录不存在」。
+          if (!pendingDeletions.isPending(this.fpId) && !(options && options.force)) {
+            setTimeout(() => {
+              if (seq === this._loadSeq) this.loadDetail({ force: true });
+            }, 1200);
+            return;
+          }
           this._photoVersion += 1;
           this._photoItems = [];
           this.setData(Object.assign({ loading: false, notFound: true, fp: null }, emptyPhotoPatch()));
@@ -176,6 +193,7 @@ Page({
         this.signPhotos(displayFp);
       })
       .catch((err) => {
+        if (seq !== this._loadSeq) return;
         this.loadedOnce = true;
         this._photoVersion += 1;
         this._photoItems = [];

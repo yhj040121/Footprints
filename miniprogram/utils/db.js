@@ -76,10 +76,11 @@ function mergeRecentFootprints(list, predicate) {
     const recent = getRecentFootprint(id);
     if (!recent || (predicate && !predicate(recent))) return;
     const index = result.findIndex((item) => item && item._id === id);
-    if (index >= 0 && sameFootprintShape(result[index], recent)) {
-      delete recentWrites[id];
-      return;
-    }
+    // S10：数据库版本已在列表中可见且内容一致时，列表直接采用数据库版本；
+    // 但绝不在此删除 recentWrites——列表查询可见 ≠ 紧随其后的详情点查（where _id）也可见，
+    // 两者可能命中不同的可见性窗口（新建后立刻进详情误报「记录不存在」的根因）。
+    // 快照交由 TTL 自然过期，或由 getFootprint 在「点查真正读到数据库版本」时切换。
+    if (index >= 0 && sameFootprintShape(result[index], recent)) return;
     const optimistic = Object.assign({}, recent, { _recentWrite: true });
     if (index >= 0) result[index] = optimistic;
     else result.push(optimistic);
@@ -112,11 +113,13 @@ function sortDesc(list) {
 // S9：null/undefined 不写缓存——「数据库暂不可见」的瞬态 null 缓存后会形成 15 分钟的毒数据
 //（getFootprint 内部的 recentWrites 兜底在缓存层之下失效，详情页误报「记录不存在」）。
 // 下次仍走 loader，由业务层（recentWrites / force 重查等）兜底。
+// S10：S9 之前写入的 null 毒条目可能仍残留在 storage（15 分钟 TTL 内）——命中值为 null
+// 一律视为未命中（新代码不再缓存 null，此判定只用于自愈历史毒数据）。
 function readThrough(cacheKey, options, loader) {
   const opts = options || {};
   if (!opts.force) {
     const cached = contentCache.getContent(cacheKey);
-    if (cached.hit) return Promise.resolve(cached.value);
+    if (cached.hit && cached.value != null) return Promise.resolve(cached.value);
   }
   return loader().then((value) => {
     if (value != null) contentCache.setContent(cacheKey, value);
@@ -234,14 +237,25 @@ function listWithLocation(options) {
 // S9：数据库暂不可见（云函数刚写成功、客户端读有写入一致性延迟）时返回 null 会被 readThrough
 // 缓存成毒数据（15 分钟内详情页误报「记录不存在」）——loader 内先用近期写入快照填补，绝不缓存 null；
 // 数据库可见且与快照一致后，下方 sameFootprintShape 命中会删除 recent 并切回数据库版本。
+// S10：删除 recent 的前提收紧为「本次点查真正从数据库读到了该记录」（dbSeen）——
+// loader 用 recent 兜底返回时 record === recent，形状必然一致，若据此删除快照，
+// 一旦缓存被清除（下拉刷新/跨页失效）而数据库点查仍处于可见性延迟窗口，详情就会误报
+//「记录不存在」。只有数据库亲眼可见才算数，切换与删除都以此为据。
 function getFootprint(id, options) {
+  let dbSeen = false; // loader 是否真正从数据库读到该记录（区别于 recentWrites 兜底）
   return readThrough('detail:' + id, options, () => {
     if (config.USE_MOCK) {
       ensureMockSeed();
-      return Promise.resolve(store.getFootprints().find((f) => f._id === id) || null);
+      const found = store.getFootprints().find((f) => f._id === id) || null;
+      dbSeen = !!found;
+      return Promise.resolve(found);
     }
     return db().collection(COLLECTION).where({ _id: id, _openid: '{openid}' }).limit(1).get()
-      .then((res) => (res.data && res.data[0]) || null)
+      .then((res) => {
+        const record = (res.data && res.data[0]) || null;
+        dbSeen = !!record;
+        return record;
+      })
       .then((record) => record || getRecentFootprint(id))
       .catch((err) => {
         const msg = (err && err.errMsg) || '';
@@ -254,7 +268,7 @@ function getFootprint(id, options) {
     if (pendingDeletions.isPending(id)) return null;
     const recent = getRecentFootprint(id);
     if (!recent) return record;
-    if (record && sameFootprintShape(record, recent)) {
+    if (record && dbSeen && sameFootprintShape(record, recent)) {
       delete recentWrites[id];
       return record;
     }
