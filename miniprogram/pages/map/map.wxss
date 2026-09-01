@@ -70,17 +70,15 @@
   opacity: 0.56;
 }
 
-/* ---------- 顶部统计栏（§26：轻量宣纸信息带，高 70~76rpx，rgba(248,245,237,.72)，无明显边框） ---------- */
+/* ---------- 顶部统计栏（§26：轻量宣纸信息带，三项等分内部居中） ---------- */
 .map-stats {
   position: absolute;
   left: 0;
   right: 0;
   display: flex;
   align-items: center;
-  gap: 0;
   height: 82rpx;
   padding: 0 18rpx;
-  border-radius: 0;
   background: rgba(248, 245, 237, 0.90);
   box-shadow: 0 1rpx 0 rgba(85, 76, 63, 0.08), 0 8rpx 20rpx rgba(55, 48, 38, 0.03);
   font-size: 25rpx;
@@ -101,13 +99,12 @@
 .stat-cluster {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 7rpx;
-  flex: 0 1 auto;
+  flex: 1 1 0;
   min-width: 0;
 }
 .stat-cluster + .stat-cluster {
-  margin-left: 16rpx;
-  padding-left: 16rpx;
   border-left: 1rpx solid rgba(91, 78, 57, 0.18);
 }
 .stat-label {
@@ -116,7 +113,6 @@
   white-space: nowrap;
 }
 .stat-recent {
-  flex: 1;
   min-width: 0;
 }
 .stat-label--recent {
@@ -127,7 +123,6 @@
 @media (max-width: 350px) {
   .map-stats { padding: 0 12rpx; font-size: 22rpx; }
   .stat-cluster { gap: 4rpx; }
-  .stat-cluster + .stat-cluster { margin-left: 9rpx; padding-left: 9rpx; }
   .stat-icon { width: 29rpx; height: 29rpx; }
   .stat-icon--mountain { width: 38rpx; height: 32rpx; }
 }
@@ -243,7 +238,8 @@
   height: 100%;
 }
 
-/* ---------- 底部浮动详情卡（§30：Floating Surface，高 220~232rpx，圆角 28~32rpx） ---------- */
+/* ---------- 底部浮动详情卡（§30：Floating Surface，高 220~232rpx，圆角 28~32rpx；
+   背景与时间线 footprint-card 保持一致：#FFFEF9 底色 + card-paper-ink.png 横版水墨） ---------- */
 .map-card {
   position: absolute;
   left: 18rpx;
@@ -254,11 +250,25 @@
   min-height: 226rpx;
   padding: 20rpx;
   gap: 18rpx;
-  background: rgba(253, 251, 246, 0.94);
-  border: 1rpx solid rgba(85, 76, 63, 0.08);
+  background: #FFFEF9;
+  border: 0;
   border-radius: 30rpx;
   box-shadow: 0 8rpx 28rpx rgba(55, 48, 38, 0.08);
+  overflow: hidden;
   z-index: 50;
+}
+.map-card__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+.map-card > .card-thumb,
+.map-card > .card-body {
+  position: relative;
+  z-index: 1;
 }
 .card-thumb {
   flex: none;

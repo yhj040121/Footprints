@@ -57,6 +57,7 @@
           <view wx:for="{{group.items}}" wx:key="id" wx:for-item="it"
                 class="item {{it.selected ? 'item--selected' : ''}}"
                 hover-class="item--hover" bindtap="onItemDetail" data-id="{{it.sourceId}}">
+            <image class="item__bg" src="/assets/bg/card-paper-ink.png" mode="scaleToFill" />
             <view class="check" catchtap="onItemToggle" data-id="{{it.id}}">
               <view class="check-box {{it.selected ? 'check-box--on' : ''}}">
                 <view wx:if="{{it.selected}}" class="check-tick"></view>

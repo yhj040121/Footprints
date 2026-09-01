@@ -183,7 +183,7 @@
   line-height: 1.3;
 }
 
-/* ---------- 记录卡（§18：高 180~190rpx、圆角 26rpx、内边距 22~24rpx、不铺山水） ---------- */
+/* ---------- 记录卡（§18：高 180~190rpx、圆角 26rpx、内边距 22~24rpx；与时间线 footprint-card / 地图 map-card 一致使用 card-paper-ink.png 横版水墨背景） ---------- */
 .item {
   position: relative;
   display: flex;
@@ -192,15 +192,32 @@
   padding: 22rpx;
   margin-bottom: var(--space-3);
   border-radius: var(--radius-card);
-  background: rgba(253, 251, 246, 0.88);
-  border: 1rpx solid var(--color-border-subtle);
+  background: #FFFEF9;
+  border: 0;
   box-shadow: var(--shadow-card);
+  overflow: hidden;
   transition: background var(--duration-fast);
 }
-.item--hover { background: rgba(240, 234, 222, 0.92); }
+.item__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity var(--duration-fast);
+}
+.item > .check,
+.item > .thumb-wrap,
+.item > .info,
+.item > .arrow {
+  position: relative;
+  z-index: 1;
+}
+.item--hover .item__bg { opacity: 0.7; }
 .item--selected {
-  border-color: rgba(48, 45, 40, 0.30);
-  background: rgba(249, 246, 238, 0.97);
+  background: transparent;
   box-shadow: inset 5rpx 0 0 rgba(48, 45, 40, 0.78), var(--shadow-card);
 }
 
