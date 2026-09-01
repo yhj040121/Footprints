@@ -109,6 +109,9 @@ function sortDesc(list) {
 }
 
 // 读缓存命中时立即返回；强制刷新或缓存过期时读取数据源并覆盖缓存。
+// S9：null/undefined 不写缓存——「数据库暂不可见」的瞬态 null 缓存后会形成 15 分钟的毒数据
+//（getFootprint 内部的 recentWrites 兜底在缓存层之下失效，详情页误报「记录不存在」）。
+// 下次仍走 loader，由业务层（recentWrites / force 重查等）兜底。
 function readThrough(cacheKey, options, loader) {
   const opts = options || {};
   if (!opts.force) {
@@ -116,7 +119,7 @@ function readThrough(cacheKey, options, loader) {
     if (cached.hit) return Promise.resolve(cached.value);
   }
   return loader().then((value) => {
-    contentCache.setContent(cacheKey, value);
+    if (value != null) contentCache.setContent(cacheKey, value);
     return value;
   });
 }

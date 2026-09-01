@@ -27,8 +27,13 @@ function buildRegionText(fp) {
     if (part && result.indexOf(part) < 0) result.push(part);
   });
   if (!result.length) {
-    const fallback = cleanRegionName(fp && fp.cityLabel);
-    if (fallback) result.push(fallback);
+    // S9 兜底链（与 map.js regionText 口径对齐）：省市区全空时，
+    // 退化到 cityLabel → address → place，让"地区"栏至少显示可读内容，
+    // 避免详情页"V1.3 之前老记录/逆解析失败/写入可见性延迟"等场景下整栏显示「未记录」。
+    const cityLabel = cleanRegionName(fp && fp.cityLabel);
+    if (cityLabel) result.push(cityLabel);
+    else if (fp && fp.address && String(fp.address).trim()) result.push(String(fp.address).trim());
+    else if (fp && fp.place && String(fp.place).trim()) result.push(String(fp.place).trim());
   }
   return result.join(' · ');
 }
