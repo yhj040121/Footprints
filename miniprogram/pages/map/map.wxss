@@ -239,7 +239,7 @@
 }
 
 /* ---------- 底部浮动详情卡（§30：Floating Surface，高 220~232rpx，圆角 28~32rpx；
-   背景与时间线 footprint-card 保持一致：#FFFEF9 底色 + card-paper-ink.png 横版水墨） ---------- */
+   背景与时间线 footprint-card 保持一致：#FFFEF9 底色 + card-paper-ink.jpg 横版水墨） ---------- */
 .map-card {
   position: absolute;
   left: 18rpx;

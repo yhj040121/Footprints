@@ -8,101 +8,64 @@
   padding-bottom: calc(170rpx + env(safe-area-inset-bottom));
 }
 
-/* ---------- 筛选 chip（§16：暖白 + 1rpx 弱边 + 底部一小段淡墨山体，控件间距 16~18rpx，页面左右边距 32rpx） ---------- */
+/* ---------- 筛选 chip（§16：使用完整水墨素材 chip-place.png / chip-time.png / chip-reset.png；动态 label 覆盖在图片中央） ---------- */
 .filter {
   padding: var(--space-3) var(--space-4) var(--space-2);
 }
 .filter-row {
   display: flex;
   align-items: center;
-  gap: 18rpx;
+  gap: 16rpx;
 }
+/* 长条 chip：宽高比 3:1（与 chip-place.png / chip-time.png 素材一致），动态 label 居中 */
 .chip {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 10rpx;
-  width: 270rpx;
-  min-height: 84rpx;
-  padding: 0 20rpx;
-  border-radius: var(--radius-full);
-  background: rgba(253, 251, 246, 0.9);
-  border: 1rpx solid var(--color-border-subtle);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-}
-.chip--time { width: 250rpx; }
-.chip--hover { opacity: 0.8; }
-.chip--on {
-  background: var(--color-action-bg);
-  border-color: var(--color-action-bg);
-}
-.chip--on .chip__label,
-.chip--on .chip__caret::before {
-  color: var(--color-action-text);
-  border-color: var(--color-action-text);
-}
-.chip--on .chip__icon { opacity: 0.9; }
-/* chip 底部一小段淡墨山体（不整块铺山，§16.2） */
-.chip::after {
-  content: "";
-  position: absolute;
-  right: -6rpx;
-  bottom: -4rpx;
-  width: 120rpx;
-  height: 44rpx;
-  background: url("/assets/ink/card-edge-right.png") no-repeat right bottom / contain;
-  opacity: 0.42;
-  pointer-events: none;
-}
-.chip__icon {
-  width: 36rpx;
-  height: 36rpx;
-  flex-shrink: 0;
-}
-.chip__label {
-  flex: 1;
-  min-width: 0;
-  font-size: 25rpx;
-  color: var(--color-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* CSS 绘制下拉箭头（替代 Unicode ˅） */
-.chip__caret {
-  position: relative;
-  width: 16rpx;
-  height: 16rpx;
-  flex-shrink: 0;
-}
-.chip__caret::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 11rpx;
-  height: 11rpx;
-  border-right: 2.5rpx solid #8F8875;
-  border-bottom: 2.5rpx solid #8F8875;
-  transform: translate(-50%, -68%) rotate(45deg);
-  border-radius: 1rpx;
-}
-/* 墨圈重置（§16.1：90~96rpx 圆形） */
-.chip-reset {
-  margin-left: auto;
-  width: 92rpx;
-  height: 92rpx;
-  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-full);
-  background: transparent;
+  width: 276rpx;
+  height: 92rpx;
+  flex-shrink: 0;
+  overflow: hidden;
 }
-.chip-reset__icon {
+.chip--time { width: 276rpx; }
+.chip--hover { opacity: 0.85; }
+/* 选中态：图片保持，加一层 8% 暗色蒙层提示 */
+.chip--on::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(48, 45, 40, 0.08);
+  z-index: 1;
+  pointer-events: none;
+}
+.chip__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+.chip__label {
+  position: relative;
+  z-index: 2;
+  padding: 0 90rpx;  /* 左右留出图片内边距，避免压到图标 / 箭头 */
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #302D28;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+/* 重置墨圈：1:1 圆形 */
+.chip--reset {
   width: 92rpx;
   height: 92rpx;
+  margin-left: auto;
+  padding: 0;
 }
 
 /* ---------- 主体 ---------- */
@@ -183,7 +146,7 @@
   line-height: 1.3;
 }
 
-/* ---------- 记录卡（§18：高 180~190rpx、圆角 26rpx、内边距 22~24rpx；与时间线 footprint-card / 地图 map-card 一致使用 card-paper-ink.png 横版水墨背景） ---------- */
+/* ---------- 记录卡（§18：高 180~190rpx、圆角 26rpx、内边距 22~24rpx；与时间线 footprint-card / 地图 map-card 一致使用 card-paper-ink.jpg 横版水墨背景） ---------- */
 .item {
   position: relative;
   display: flex;

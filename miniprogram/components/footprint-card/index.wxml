@@ -1,5 +1,5 @@
 <view class="fp-card card" bindtap="onTap">
-  <image class="card-bg" src="/assets/bg/card-paper-ink.png" mode="scaleToFill" />
+  <image class="card-bg" src="/assets/bg/card-paper-ink.jpg" mode="scaleToFill" />
   <view class="cover">
     <image
       wx:if="{{coverUrl}}"

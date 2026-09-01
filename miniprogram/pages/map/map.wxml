@@ -72,7 +72,7 @@
 
   <!-- 底部浮动详情卡（§30：Floating Surface + 轻阴影；§31 查看记录用墨刷按钮） -->
   <view wx:if="{{card}}" class="map-card">
-    <image class="map-card__bg" src="/assets/bg/card-paper-ink.png" mode="scaleToFill" />
+    <image class="map-card__bg" src="/assets/bg/card-paper-ink.jpg" mode="scaleToFill" />
     <image wx:if="{{card.thumb}}" class="card-thumb" src="{{card.thumb}}" mode="aspectFill" />
     <view class="card-body">
       <view class="card-headline">
