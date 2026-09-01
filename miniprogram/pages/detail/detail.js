@@ -418,6 +418,7 @@ Page({
       if (settled) return;
       settled = true;
       pendingDeletions.clear(footprintId);
+      db.forgetFootprint(footprintId);
       db.invalidateFootprintsCache();
       refreshDataPages();
     };

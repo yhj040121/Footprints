@@ -16,10 +16,59 @@ function refreshTimeline() {
     const pages = getCurrentPages() || [];
     pages.forEach((p) => {
       if (p && p.route === 'pages/timeline/timeline' && typeof p.loadFirst === 'function') {
-        p.loadFirst();
+        p.loadFirst({ force: true });
       }
     });
   } catch (e) { /* 栈不可用时由 timeline onShow 兜底刷新 */ }
+}
+
+/** 新增/编辑正式落定后，主动刷新当前页面栈中的日历、地图、导出与我的统计。 */
+function refreshOtherDataPages(footprintId) {
+  try {
+    const pages = getCurrentPages() || [];
+    pages.forEach((page) => {
+      if (!page) return;
+      if (page.route === 'pages/calendar/calendar' && typeof page._loadMonth === 'function') {
+        const ym = page._ym();
+        if (page._cache) delete page._cache[ym];
+        page._loadMonth(ym);
+      } else if (page.route === 'pages/map/map' && typeof page.loadRecords === 'function') {
+        if (footprintId) page._pendingFocusId = footprintId;
+        page.loadRecords(true);
+      } else if (page.route === 'pages/export/export' && typeof page.load === 'function') {
+        page.load({ force: true });
+      } else if (page.route === 'pages/mine/mine' && typeof page.refresh === 'function') {
+        page.refresh();
+      }
+    });
+  } catch (e) { /* 不在页面栈中的 tab 由下次 onShow 强制刷新 */ }
+}
+
+function optimisticFootprint(footprintId, snap, createdAt) {
+  return {
+    _id: footprintId,
+    date: snap.date,
+    place: snap.place,
+    lat: typeof snap.lat === 'number' ? snap.lat : null,
+    lng: typeof snap.lng === 'number' ? snap.lng : null,
+    address: snap.address || '',
+    province: snap.province || '',
+    city: snap.city || '',
+    district: snap.district || '',
+    adcode: snap.adcode || '',
+    cityLabel: snap.cityLabel || '',
+    locationSource: snap.locationSource || '',
+    note: snap.note || '',
+    tags: (snap.tags || []).slice(),
+    photos: (snap.photos || []).map((photo) => (photo.isOld ? {
+      key: photo.key
+    } : {
+      url: photo.tempFilePath || '',
+      width: photo.width,
+      height: photo.height
+    })),
+    createdAt: createdAt || (snap.origin && snap.origin.createdAt) || Date.now()
+  };
 }
 
 /** 后台编辑链落定后刷新详情页（若其在页面栈中且正是本条记录） */
@@ -173,7 +222,7 @@ module.exports = {
       photoIds: snap.photos.map((p) => p.photoId)
     };
     this.runDraftSave(ctx, snap).then(
-      () => this.finishDraft(ctx),
+      (result) => this.finishDraft(ctx, result),
       (err) => this.failDraft(ctx, snap, err)
     );
   },
@@ -202,6 +251,8 @@ module.exports = {
           photoId: p.photoId,
           tempFilePath: p.tempFilePath,
           ext: p.ext,
+          width: p.width,
+          height: p.height,
           status: p.status,
           progress: p.progress
         }))
@@ -251,19 +302,24 @@ module.exports = {
     if (snap.adcode) payload.adcode = snap.adcode;
     if (snap.cityLabel) payload.cityLabel = snap.cityLabel;
     if (snap.locationSource) payload.locationSource = snap.locationSource;
-    await request.callFunction('secCheck', Object.assign({
+    const result = await request.callFunction('secCheck', Object.assign({
       action: 'commitSave',
       clientSaveId: ctx.clientSaveId
     }, payload));
     this.throwIfCancelled(ctx);
+    if (result && result.footprintId) {
+      db.rememberFootprint(optimisticFootprint(result.footprintId, snap, result.createdAt));
+    }
+    return result;
   },
 
   // 草稿链成功：删草稿、刷新时间线（正式记录出现）；无弹层（保存瞬间的 toast 已给过反馈）
-  finishDraft(ctx) {
+  finishDraft(ctx, result) {
     drafts.remove(ctx.draftId);
     db.invalidateFootprintsCache();
     draftCleanup.forEachPhotoCleanup(this, ctx); // 清本链轮询时间记录（见底部工具函数）
     refreshTimeline();
+    refreshOtherDataPages(result && result.footprintId);
   },
 
   // 草稿链失败：草稿标 failed + 原因落盘，时间线显示「未同步」，轻提示一次（不弹层打断）
@@ -296,12 +352,27 @@ module.exports = {
       lat: typeof this._lat === 'number' ? this._lat : null,
       lng: typeof this._lng === 'number' ? this._lng : null,
       note: this.data.note || '',
+      address: this.data.address || '',
+      province: this.data.province || '',
+      city: this.data.city || '',
+      district: this.data.district || '',
+      adcode: this.data.adcode || '',
+      cityLabel: this.data.cityLabel || '',
+      locationSource: this.data.locationSource || '',
       // 标签体系下架（S8）：编辑保留原记录标签（原样回传，服务端豁免存量）
       tags: (this._origin && this._origin.tags) || [],
       origin: this._origin ? {
         place: this._origin.place,
         note: this._origin.note || '',
-        tags: (this._origin.tags || []).slice()
+        tags: (this._origin.tags || []).slice(),
+        address: this._origin.address || '',
+        province: this._origin.province || '',
+        city: this._origin.city || '',
+        district: this._origin.district || '',
+        adcode: this._origin.adcode || '',
+        cityLabel: this._origin.cityLabel || '',
+        locationSource: this._origin.locationSource || '',
+        createdAt: this._origin.createdAt
       } : null,
       removedKeys: this._removedKeys.slice(),
       photos: this.data.photos.map((p) => (p.isOld ? {
@@ -315,6 +386,8 @@ module.exports = {
         photoId: p.photoId,
         tempFilePath: p.tempFilePath,
         ext: p.ext,
+        width: p.width,
+        height: p.height,
         status: p.status,
         progress: p.progress,
         isOld: false
@@ -359,22 +432,19 @@ module.exports = {
     const payload = {
       date: snap.date,
       place: snap.place,
+      lat: snap.lat,
+      lng: snap.lng,
+      address: snap.address || '',
+      province: snap.province || '',
+      city: snap.city || '',
+      district: snap.district || '',
+      adcode: snap.adcode || '',
+      cityLabel: snap.cityLabel || '',
+      locationSource: snap.locationSource || '',
       note: snap.note,
       tags: snap.tags,
       photos: snap.photos.map((p) => (p.isOld ? { key: p.key } : { photoId: p.photoId }))
     };
-    if (typeof snap.lat === 'number' && typeof snap.lng === 'number') {
-      payload.lat = snap.lat;
-      payload.lng = snap.lng;
-    }
-    // V1.3 地点与地区字段（编辑链同 commitSave 口径；修改地区/重新选择均生效）
-    if (snap.address) payload.address = snap.address;
-    if (snap.province) payload.province = snap.province;
-    if (snap.city) payload.city = snap.city;
-    if (snap.district) payload.district = snap.district;
-    if (snap.adcode) payload.adcode = snap.adcode;
-    if (snap.cityLabel) payload.cityLabel = snap.cityLabel;
-    if (snap.locationSource) payload.locationSource = snap.locationSource;
     await this.commitEditSnap(payload, snap, ctx);
   },
 
@@ -392,6 +462,7 @@ module.exports = {
       .then((data) => {
         db.invalidateFootprintsCache();
         const footprintId = (data && data.footprintId) ? data.footprintId : editId;
+        db.rememberFootprint(optimisticFootprint(footprintId, snap));
         return db.getFootprint(footprintId, { force: true }).then((fp) => {
           this.throwIfCancelled(ctx);
           return this.editMatches(fp, payload, editId);
@@ -414,6 +485,8 @@ module.exports = {
     if (fp.date !== payload.date) return false;
     if (fp.place !== payload.place) return false;
     if ((fp.note || '') !== (payload.note || '')) return false;
+    const locationFields = ['address', 'province', 'city', 'district', 'adcode', 'cityLabel', 'locationSource'];
+    if (locationFields.some((field) => (fp[field] || '') !== (payload[field] || ''))) return false;
     // lat/lng 同有同无且数值一致（契约 §0.4）
     const hasCoord = typeof payload.lat === 'number' && typeof payload.lng === 'number';
     if (hasCoord) {
@@ -446,6 +519,7 @@ module.exports = {
     db.invalidateFootprintsCache();
     draftCleanup.forEachPhotoCleanup(this, ctx);
     refreshTimeline();
+    refreshOtherDataPages(ctx.editId);
     refreshDetail(ctx.editId);
   },
 

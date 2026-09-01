@@ -574,7 +574,15 @@ Page(Object.assign({
       _id: d.editId,
       place: origin.place,
       note: origin.note || '',
-      tags: origin.tags || []
+      tags: origin.tags || [],
+      address: origin.address || '',
+      province: origin.province || '',
+      city: origin.city || '',
+      district: origin.district || '',
+      adcode: origin.adcode || '',
+      cityLabel: origin.cityLabel || '',
+      locationSource: origin.locationSource || '',
+      createdAt: origin.createdAt
     };
     this._removedKeys = d.removedKeys || [];
     this._clientSaveId = d.clientSaveId || null; // 沿用幂等 id（成功半途时可回读原结果）

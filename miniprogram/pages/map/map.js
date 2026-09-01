@@ -138,12 +138,13 @@ Page({
         customCallout: { display: 'ALWAYS', anchorY: 0 }
       }));
       const markerViews = list.map((f, i) => ({
+        // 近期写入缓存中的新照片先用本地临时路径；正式记录可见后再自然切到 OSS 缩略图。
         markerId: i,
         recordId: f._id,
         place: f.place,
         meta: shortDate(f.date) + ((f.photos || []).length ? ' · ' + f.photos.length + '张' : ''),
-        photoUrl: '',
-        hasPhoto: !!((f.photos || [])[0] && (f.photos || [])[0].key),
+        photoUrl: ((f.photos || [])[0] && (f.photos || [])[0].url) || '',
+        hasPhoto: !!((f.photos || [])[0] && ((f.photos || [])[0].key || (f.photos || [])[0].url)),
         side: i % 2 ? 'left' : 'right',
         selected: i === selectedIndex
       }));
@@ -382,19 +383,20 @@ Page({
   },
 
   loadCardPhotos(record) {
-    const photos = (record.photos || []).filter((p) => p && p.key);
+    const photos = (record.photos || []).filter((p) => p && (p.key || p.url));
     if (!photos.length) return;
     const selected = photos.slice(0, 6);
     const byKey = {};
     const need = [];
     selected.forEach((p) => {
+      if (p.url) return;
       const cached = contentCache.getSigned(constants.PROCESS_THUMB, p.key);
       if (cached && cached.url && cached.expireAt > Date.now() + 60000) byKey[p.key] = cached.url;
       else need.push(p.key);
     });
     const apply = () => {
       if (!this.data.card || this.data.card.id !== record._id) return;
-      const urls = selected.map((p) => byKey[p.key]).filter(Boolean);
+      const urls = selected.map((p) => p.url || byKey[p.key]).filter(Boolean);
       const visibleCount = photos.length > 5 ? 5 : 6;
       this.setData({
         'card.thumb': urls[0] || '',

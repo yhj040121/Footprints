@@ -55,7 +55,8 @@ Page({
     const cloudSkip = this._cloudSkip || d.list.filter((it) => !it.isDraft).length;
     db.listFootprintsPage(cloudSkip, constants.PAGE_SIZE)
       .then((res) => {
-        this._cloudSkip = cloudSkip + (res.list || []).length;
+        const cloudCount = typeof res.cloudCount === 'number' ? res.cloudCount : (res.list || []).length;
+        this._cloudSkip = cloudSkip + cloudCount;
         const added = this.attachEditDrafts(this.decorateList(pendingDeletions.filter(res.list)));
         const base = d.list.filter((it) => !it.isDraft);
         const list = applyGrouping(base.concat(added));
@@ -77,7 +78,7 @@ Page({
         return db.listFootprintsPage(0, constants.PAGE_SIZE, options);
       })
       .then((res) => {
-        this._cloudSkip = (res.list || []).length;
+        this._cloudSkip = typeof res.cloudCount === 'number' ? res.cloudCount : (res.list || []).length;
         const list = this.mergeDrafts(this.attachEditDrafts(this.decorateList(pendingDeletions.filter(res.list))));
         this._loadedOnce = true;
         this.setData({ list, hasMore: res.hasMore, loading: false });
@@ -96,12 +97,14 @@ Page({
 
   decorateList(records) {
     return records.map((rec) => {
-      const coverKey = rec.photos && rec.photos.length ? rec.photos[0].key : '';
+      const firstPhoto = rec.photos && rec.photos.length ? rec.photos[0] : null;
+      const coverKey = firstPhoto && firstPhoto.key ? firstPhoto.key : '';
+      const localCover = firstPhoto && firstPhoto.url ? firstPhoto.url : '';
       const cached = coverKey ? this._coverCache[coverKey] : null;
       const validCover = cached && cached.expireAt > Date.now() + 60000;
       return Object.assign({}, rec, {
         coverKey,
-        coverUrl: validCover ? cached.url : '',
+        coverUrl: validCover ? cached.url : localCover,
         dateYear: (rec.date || '').slice(0, 4),
         dateMd: (rec.date || '').slice(5).replace('-', '.'),
         showDate: false,
@@ -253,7 +256,13 @@ Page({
   onCardTap(e) {
     const id = e.detail.id;
     const item = this.data.list.find((it) => it._id === id);
-    if (e.detail.isDraft || (item && item.isDraft) || drafts.get(id)) {
+    const draft = drafts.get(id);
+    if (e.detail.isDraft || (item && item.isDraft) || draft) {
+      const status = (draft && draft.status) || (item && item.draftStatus) || 'syncing';
+      if (status === 'syncing') {
+        wx.showToast({ title: '正在发布，请稍候', icon: 'none' });
+        return;
+      }
       getApp().globalData.restoreDraftId = id;
       wx.switchTab({ url: '/pages/add/add' });
       return;

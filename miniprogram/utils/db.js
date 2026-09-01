@@ -14,6 +14,79 @@ const COLLECTION = 'footprint';
 const USER_COLLECTION = 'user';
 
 let mockSeeded = false;
+const RECENT_WRITE_TTL_MS = 2 * 60 * 1000;
+const recentWrites = {};
+
+function cloneFootprint(record) {
+  return Object.assign({}, record, {
+    photos: (record.photos || []).map((photo) => Object.assign({}, photo)),
+    tags: (record.tags || []).slice()
+  });
+}
+
+function createdAtMs(record) {
+  return dateUtil.tsOf(record) || Date.now();
+}
+
+function sameFootprintShape(a, b) {
+  if (!a || !b || a._id !== b._id) return false;
+  const fields = [
+    'date', 'place', 'note', 'lat', 'lng', 'address', 'province', 'city',
+    'district', 'adcode', 'cityLabel', 'locationSource'
+  ];
+  if (fields.some((field) => (a[field] == null ? '' : a[field]) !== (b[field] == null ? '' : b[field]))) {
+    return false;
+  }
+  if (JSON.stringify(a.tags || []) !== JSON.stringify(b.tags || [])) return false;
+  const aPhotos = a.photos || [];
+  const bPhotos = b.photos || [];
+  if (aPhotos.length !== bPhotos.length) return false;
+  // 新增照片在乐观记录里只有本地 url，无法与服务端生成的 travel key 做等值判断；
+  // 此时宁可保留短期乐观版本，也不能误切回仍是旧照片的客户端快照。
+  if (bPhotos.some((photo) => !photo || !photo.key)) return bPhotos.length === 0;
+  return aPhotos.every((photo, index) => photo && photo.key === bPhotos[index].key);
+}
+
+function getRecentFootprint(id) {
+  const entry = recentWrites[id];
+  if (!entry) return null;
+  if (entry.expireAt <= Date.now()) {
+    delete recentWrites[id];
+    return null;
+  }
+  return cloneFootprint(entry.record);
+}
+
+// 云函数刚写成功而客户端数据库尚未可见时，用本次保存快照填补短暂空窗；
+// 一旦客户端读到内容一致的正式记录，立即切回数据库版本（含正式照片 key）。
+function rememberFootprint(record) {
+  if (!record || !record._id) return;
+  const next = cloneFootprint(record);
+  if (!next.createdAt) next.createdAt = Date.now();
+  recentWrites[next._id] = { record: next, expireAt: Date.now() + RECENT_WRITE_TTL_MS };
+}
+
+function forgetFootprint(id) {
+  if (id) delete recentWrites[id];
+}
+
+function mergeRecentFootprints(list, predicate) {
+  const result = (list || []).map((item) => Object.assign({}, item));
+  Object.keys(recentWrites).forEach((id) => {
+    const recent = getRecentFootprint(id);
+    if (!recent || (predicate && !predicate(recent))) return;
+    const index = result.findIndex((item) => item && item._id === id);
+    if (index >= 0 && sameFootprintShape(result[index], recent)) {
+      delete recentWrites[id];
+      return;
+    }
+    const optimistic = Object.assign({}, recent, { _recentWrite: true });
+    if (index >= 0) result[index] = optimistic;
+    else result.push(optimistic);
+  });
+  return result;
+}
+
 function ensureMockSeed() {
   if (!config.USE_MOCK) return;
   if (!mockSeeded) {
@@ -71,6 +144,15 @@ function listFootprintsPage(skip, limit, options) {
       .limit(limit)
       .get()
       .then((res) => ({ list: res.data, hasMore: res.data.length === limit }));
+  }).then((res) => {
+    const cloudList = (res && res.list) || [];
+    if (skip !== 0) return Object.assign({}, res, { cloudCount: cloudList.length });
+    const merged = sortDesc(mergeRecentFootprints(cloudList));
+    return {
+      list: merged.slice(0, limit),
+      hasMore: !!res.hasMore || merged.length > limit,
+      cloudCount: cloudList.length
+    };
   });
 }
 
@@ -102,7 +184,10 @@ function listByRange(startDate, endDate, options) {
         return res.data.length === 20 ? step() : all;
       });
     return step();
-  }).then((list) => pendingDeletions.filter(list));
+  }).then((list) => pendingDeletions.filter(mergeRecentFootprints(
+    list,
+    (record) => record.date >= startDate && record.date <= endDate
+  )));
 }
 
 // 地图：全部含经纬度的记录（客户端 SDK 单次上限 20 条，循环分页，契约 §2.3）
@@ -134,7 +219,10 @@ function listWithLocation(options) {
     return step().then((list) =>
       list.filter((f) => typeof f.lat === 'number' && typeof f.lng === 'number')
     );
-  }).then((list) => pendingDeletions.filter(list));
+  }).then((list) => pendingDeletions.filter(mergeRecentFootprints(
+    list,
+    (record) => typeof record.lat === 'number' && typeof record.lng === 'number'
+  ).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : createdAtMs(a) - createdAtMs(b)))));
 }
 
 // 详情：按 id 取单条（S7-R1：doc().get() 在自定义规则下不满足子集检查，改 where({_id, _openid})）
@@ -155,6 +243,15 @@ function getFootprint(id, options) {
         e.network = true;
         throw e;
       });
+  }).then((record) => {
+    if (pendingDeletions.isPending(id)) return null;
+    const recent = getRecentFootprint(id);
+    if (!recent) return record;
+    if (record && sameFootprintShape(record, recent)) {
+      delete recentWrites[id];
+      return record;
+    }
+    return recent;
   });
 }
 
@@ -163,7 +260,7 @@ function stats(options) {
   return readThrough('stats', options, () => {
     if (config.USE_MOCK) {
       ensureMockSeed();
-      const all = pendingDeletions.filter(store.getFootprints());
+      const all = pendingDeletions.filter(mergeRecentFootprints(store.getFootprints()));
       const days = {};
       let photos = 0;
       all.forEach((f) => {
@@ -185,7 +282,7 @@ function stats(options) {
         return res.data.length === 20 ? step() : all;
       });
     return step().then(() => {
-      const visible = pendingDeletions.filter(all);
+      const visible = pendingDeletions.filter(mergeRecentFootprints(all));
       const days = {};
       let photos = 0;
       visible.forEach((f) => {
@@ -223,6 +320,8 @@ module.exports = {
   listByRange,
   listWithLocation,
   getFootprint,
+  rememberFootprint,
+  forgetFootprint,
   stats,
   getProfile,
   invalidateFootprintsCache: contentCache.invalidateContent
