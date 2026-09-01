@@ -1,63 +1,73 @@
 /* 足迹地图页（需求文档 §21-§32）：真实地图 + 暖纸中和层 + 局部透明水墨 + 轻统计带
    + 透明 Marker（圆形照片/墨线/墨点）+ 墨圈定位 + 浮动详情卡 + 墨刷按钮 */
 .map-page {
+  --map-paper: #F6F2E9;
+  --map-wash: rgba(248, 245, 237, 0.46);
+  --map-ink-opacity: 1;
   position: relative;
   height: 100vh;
   overflow: hidden;
+  background: var(--map-paper);
 }
 
 .map {
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
+  z-index: 0;
 }
 
-/* ---------- 地图同层纸色：cover-* 才能稳定覆盖原生 map（真机/模拟器一致） ---------- */
+/* ---------- 纯视觉穿透层：普通同层节点，不参与任何地图/按钮触摸命中 ---------- */
+.map-visual-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 20;
+  pointer-events: none !important;
+  overflow: hidden;
+}
+.map-visual-layer view,
+.map-visual-layer image {
+  pointer-events: none !important;
+}
 .map-veil {
   position: absolute;
   left: 0;
   top: 0;
   width: 100%;
   height: 100%;
-  background: rgba(246, 243, 235, 0.12);
-  pointer-events: none;
-  z-index: 1;
-}
-.map-paper {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.56;
-  pointer-events: none;
-  z-index: 2;
+  background: linear-gradient(180deg, rgba(248, 245, 237, 0.28) 0%, transparent 22%), var(--map-wash);
 }
 
-/* ---------- 局部水墨：只补结构边缘，主材质由上方半透明宣纸统一 ---------- */
+/* ---------- 局部水墨：只占边缘，中心道路/城市/照片墨钉保持可读 ---------- */
 .map-ink {
   position: absolute;
   pointer-events: none;
-  z-index: 3;
-  opacity: 0.14;
+  opacity: var(--map-ink-opacity);
 }
 .map-ink--left {
-  left: 0;
-  top: 23%;
-  width: 42%;
-  height: 46%;
+  left: -42rpx;
+  top: 27%;
+  width: 360rpx;
+  height: 620rpx;
 }
 .map-ink--bottom {
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  height: 27%;
+  left: -30rpx;
+  bottom: 120rpx;
+  width: calc(100% + 60rpx);
+  height: 300rpx;
+  opacity: 1;
 }
 .map-ink--birds {
-  right: 34rpx;
-  top: 238rpx;
-  width: 156rpx;
-  height: 78rpx;
-  opacity: 0.28;
+  right: 38rpx;
+  top: 244rpx;
+  width: 144rpx;
+  height: 72rpx;
+  opacity: 0.56;
 }
 
 /* ---------- 顶部统计栏（§26：轻量宣纸信息带，高 70~76rpx，rgba(248,245,237,.72)，无明显边框） ---------- */
@@ -67,40 +77,79 @@
   right: 0;
   display: flex;
   align-items: center;
-  gap: 10rpx;
-  height: 72rpx;
-  padding: 0 26rpx;
+  gap: 12rpx;
+  height: 82rpx;
+  padding: 0 22rpx;
   border-radius: 0;
-  background: rgba(248, 245, 237, 0.84);
+  background: rgba(248, 245, 237, 0.90);
   box-shadow: 0 1rpx 0 rgba(85, 76, 63, 0.08), 0 8rpx 20rpx rgba(55, 48, 38, 0.03);
-  font-size: 24rpx;
+  font-size: 25rpx;
   color: var(--color-text-primary);
   z-index: 50;
 }
 .stat-icon {
-  width: 30rpx;
-  height: 30rpx;
-  opacity: 0.8;
+  width: 34rpx;
+  height: 34rpx;
+  opacity: 0.72;
   flex-shrink: 0;
 }
-.stat-item { display: inline-flex; align-items: center; }
-.stat-dot { color: var(--color-text-muted); }
-.stat-recent { flex: 1; min-width: 0; color: var(--color-text-secondary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.stat-icon--mountain {
+  width: 46rpx;
+  height: 38rpx;
+  opacity: 0.68;
+}
+.stat-cluster {
+  display: flex;
+  align-items: center;
+  gap: 7rpx;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.stat-label {
+  color: #49443B;
+  line-height: 1;
+  white-space: nowrap;
+}
+.stat-dot {
+  color: #8E8779;
+  font-size: 28rpx;
+  line-height: 1;
+}
+.stat-recent {
+  flex: 1;
+  min-width: 0;
+}
+.stat-label--recent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .route-info {
-  margin-left: auto;
-  width: 44rpx; height: 44rpx;
+  margin: 0 0 0 auto;
+  width: 52rpx;
+  height: 52rpx;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
-  background: rgba(90, 80, 64, 0.08);
+  background: transparent;
 }
 .route-info::after { border: 0; }
 .route-info__icon {
-  width: 32rpx;
-  height: 32rpx;
-  opacity: 0.8;
+  width: 48rpx;
+  height: 48rpx;
+  opacity: 0.70;
+}
+
+@media (max-width: 350px) {
+  .map-stats { gap: 7rpx; padding: 0 16rpx; font-size: 22rpx; }
+  .stat-cluster { gap: 4rpx; }
+  .stat-icon { width: 29rpx; height: 29rpx; }
+  .stat-icon--mountain { width: 38rpx; height: 32rpx; }
+  .stat-dot { font-size: 24rpx; }
+  .route-info { width: 46rpx; height: 46rpx; }
+  .route-info__icon { width: 42rpx; height: 42rpx; }
 }
 
 /* ---------- Marker callout（§27：无白色胶囊，完全透明背景；圆形照片 + 地点文字 + 短墨线） ---------- */

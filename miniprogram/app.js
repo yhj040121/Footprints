@@ -8,7 +8,8 @@ App({
     openid: '',
     profile: null,       // { avatarUrl, nickname }（标签体系待重写，customTags 已移除，见 S8）
     loginReady: null,    // Promise，页面可 await 登录完成
-    loginFailed: false   // 断网等导致登录失败，页面展示重试入口
+    loginFailed: false,  // 断网等导致登录失败，页面展示重试入口
+    focusMapFootprintId: '' // 详情页切换到地图 tab 后，一次性定位并选中对应足迹
   },
 
   onLaunch() {

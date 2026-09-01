@@ -1,5 +1,9 @@
 {
   "navigationBarTitleText": "足迹详情",
+  "navigationBarBackgroundColor": "#F6F2E9",
+  "navigationBarTextStyle": "black",
+  "backgroundColor": "#F6F2E9",
+  "backgroundTextStyle": "dark",
   "usingComponents": {
     "mock-badge": "/components/mock-badge/index"
   }

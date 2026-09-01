@@ -23,11 +23,58 @@ function regionText(record) {
   return [record.city, record.district].filter(Boolean).join('') || record.address || '';
 }
 
+function cityIdentity(record) {
+  const city = cleanRegion(record && (record.cityLabel || record.city));
+  if (city) return 'name:' + city;
+  const adcode = String((record && record.adcode) || '');
+  return /^\d{6}$/.test(adcode) ? 'adcode:' + adcode.slice(0, 4) : '';
+}
+
+function fallbackRegion(record) {
+  const named = cleanRegion(record && (record.cityLabel || record.city || record.district || record.province));
+  if (named) return named;
+  const place = String((record && record.place) || '').trim();
+  if (!place) return '—';
+  const prefix = place.split(/[·•]/)[0].trim();
+  return (prefix || place).replace(/(火车站|高铁站|汽车站|客运站|景区|公园|车站|站)$/u, '') || prefix || place;
+}
+
+function coordDistance(a, b) {
+  const lat = ((a.lat + b.lat) / 2) * Math.PI / 180;
+  const dy = a.lat - b.lat;
+  const dx = (a.lng - b.lng) * Math.cos(lat);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+// 详情页通过 tab 切换进入地图时无法携带 query，用一次性全局字段交接待聚焦的足迹 id。
+function takeFocusMapFootprintId() {
+  try {
+    const app = getApp();
+    const id = app && app.globalData && app.globalData.focusMapFootprintId;
+    if (id) app.globalData.focusMapFootprintId = '';
+    return id || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 Page({
   data: {
     latitude: DEFAULT_CENTER.latitude,
     longitude: DEFAULT_CENTER.longitude,
     scale: DEFAULT_SCALE,
+    mapSetting: {
+      enableZoom: true,
+      enableScroll: true,
+      enableRotate: false,
+      enableOverlooking: false,
+      enableSatellite: false,
+      enableTraffic: false,
+      enablePoi: false,
+      enableBuilding: false,
+      showCompass: false,
+      showScale: false
+    },
     includePoints: [],
     markers: [],
     markerViews: [],
@@ -45,10 +92,13 @@ Page({
   onLoad() {
     this._records = [];
     this._thumbCache = {};
+    this._regionCache = {};
+    this._regionFailed = {};
     this._lastMarkerTapAt = 0;
     this._view = null;
     this._loadVersion = 0;
     this._skipShowRefresh = true;
+    this._pendingFocusId = takeFocusMapFootprintId();
     try {
       const win = wx.getWindowInfo();
       this.setData({ statsTop: (win.statusBarHeight || 20) + 56 });
@@ -59,6 +109,8 @@ Page({
   onShow() {
     const tb = this.getTabBar && this.getTabBar();
     if (tb) tb.setSelected(3);
+    const focusId = takeFocusMapFootprintId();
+    if (focusId) this._pendingFocusId = focusId;
     if (this._skipShowRefresh) {
       this._skipShowRefresh = false;
       return;
@@ -71,7 +123,8 @@ Page({
     db.listWithLocation({ force: true }).then((list) => {
       if (version !== this._loadVersion) return;
       this._records = list;
-      const selectedId = keepView && this.data.card ? this.data.card.id : '';
+      const requestedId = this._pendingFocusId || '';
+      const selectedId = requestedId || (keepView && this.data.card ? this.data.card.id : '');
       const selectedIndex = selectedId ? list.findIndex((f) => f._id === selectedId) : -1;
       // Marker：小墨点代表真实坐标（§27.3），地点信息由上方透明 callout 呈现（无白色胶囊）
       const markers = list.map((f, i) => ({
@@ -102,12 +155,7 @@ Page({
         dottedLine: true,
         arrowLine: false
       }] : [];
-      const citySet = {};
-      list.forEach((f) => {
-        const city = cleanRegion(f.cityLabel || f.city);
-        if (city) citySet[city] = true;
-      });
-      const recent = list.slice().reverse().find((f) => f.cityLabel || f.city || f.province);
+      const regionStats = this.buildRegionStats(list);
       const latest = list[list.length - 1];
       const includePoints = this.pointsForInitialView(points);
       const patch = {
@@ -116,12 +164,17 @@ Page({
         polyline,
         includePoints: keepView ? [] : includePoints,
         footprintCount: list.length,
-        cityCount: Object.keys(citySet).length,
-        recentRegion: recent ? cleanRegion(recent.cityLabel || recent.city || recent.province) : '—',
+        cityCount: regionStats.cityCount,
+        recentRegion: regionStats.recentRegion,
         empty: list.length === 0,
         mapError: false
       };
-      if (keepView) {
+      if (requestedId && selectedIndex >= 0) {
+        patch.includePoints = [];
+        patch.latitude = list[selectedIndex].lat;
+        patch.longitude = list[selectedIndex].lng;
+        patch.scale = LOCATE_SCALE;
+      } else if (keepView) {
         const view = this._view || {
           latitude: this.data.latitude,
           longitude: this.data.longitude,
@@ -134,10 +187,12 @@ Page({
         patch.longitude = latest ? latest.lng : DEFAULT_CENTER.longitude;
         patch.scale = DEFAULT_SCALE;
       }
+      if (requestedId) this._pendingFocusId = '';
       const focusIndex = selectedIndex >= 0 ? selectedIndex : (!keepView && list.length ? list.length - 1 : -1);
       this.setData(patch, () => {
         if (version !== this._loadVersion) return;
         this.loadMarkerThumbs(list, version);
+        this.resolveMissingRegions(list, version);
         // 初次进入默认选中最近一条，参考稿中的照片墨钉与底部详情卡立即形成联动。
         if (focusIndex >= 0) this.selectMarker(focusIndex);
       });
@@ -157,6 +212,90 @@ Page({
       Math.max.apply(null, lngs) - Math.min.apply(null, lngs)
     );
     return span > 5 ? points.slice(-5) : points;
+  },
+
+  // 统计优先使用真实城市字段/adcode；旧记录缺行政区时按约 50km 经纬度近邻聚类，避免长期显示 0。
+  buildRegionStats(list) {
+    const citySet = {};
+    const knownCoords = [];
+    const unknown = [];
+    (list || []).forEach((record) => {
+      const identity = cityIdentity(record);
+      const point = { lat: record.lat, lng: record.lng };
+      if (identity) {
+        citySet[identity] = true;
+        knownCoords.push(point);
+      } else {
+        unknown.push(point);
+      }
+    });
+    const clusters = [];
+    unknown.forEach((point) => {
+      if (knownCoords.some((known) => coordDistance(point, known) <= 0.45)) return;
+      const hit = clusters.find((cluster) => coordDistance(point, cluster) <= 0.45);
+      if (hit) {
+        hit.lat = (hit.lat * hit.count + point.lat) / (hit.count + 1);
+        hit.lng = (hit.lng * hit.count + point.lng) / (hit.count + 1);
+        hit.count += 1;
+      } else {
+        clusters.push({ lat: point.lat, lng: point.lng, count: 1 });
+      }
+    });
+    const recent = (list || []).length ? list[list.length - 1] : null;
+    return {
+      cityCount: Object.keys(citySet).length + clusters.length,
+      recentRegion: recent ? fallbackRegion(recent) : '—'
+    };
+  },
+
+  // 旧记录仅有坐标时后台补行政区；解析失败保留上面的坐标聚类结果，不阻塞地图交互。
+  resolveMissingRegions(list, version) {
+    const queue = [];
+    let usedCache = false;
+    (list || []).forEach((record) => {
+      if (cityIdentity(record)) return;
+      const key = record.lat.toFixed(5) + ',' + record.lng.toFixed(5);
+      if (this._regionCache[key]) {
+        Object.assign(record, this._regionCache[key]);
+        usedCache = true;
+      } else if (!this._regionFailed[key]) {
+        queue.push({ key, record });
+      }
+    });
+    if (usedCache) this.updateRegionStats(version);
+    if (!queue.length) return;
+    let cursor = 0;
+    const worker = () => {
+      if (cursor >= queue.length) return Promise.resolve();
+      const task = queue[cursor++];
+      return request.callFunction('geoResolve', {
+        lat: task.record.lat,
+        lng: task.record.lng,
+        fallbackPlace: task.record.place
+      }).then((region) => {
+        this._regionCache[task.key] = region;
+        if (version === this._loadVersion) Object.assign(task.record, region);
+      }).catch(() => {
+        this._regionFailed[task.key] = true;
+      }).then(worker);
+    };
+    const workers = [];
+    for (let i = 0; i < Math.min(3, queue.length); i++) workers.push(worker());
+    Promise.all(workers).then(() => this.updateRegionStats(version));
+  },
+
+  updateRegionStats(version) {
+    if (version !== this._loadVersion) return;
+    const stats = this.buildRegionStats(this._records);
+    const patch = {
+      cityCount: stats.cityCount,
+      recentRegion: stats.recentRegion
+    };
+    if (this.data.card) {
+      const selected = this._records.find((record) => record._id === this.data.card.id);
+      if (selected) patch['card.regionText'] = regionText(selected);
+    }
+    this.setData(patch);
   },
 
   loadMarkerThumbs(list, version) {

@@ -1,21 +1,26 @@
-/* detail 足迹详情页 —— 水墨暖纸色，仅复用全局 token 与 fp-* 通用类，无阴影 */
+/* 足迹详情页：宣纸旅行记录册、照片优先、自然纵向滚动。 */
 
 .page {
+  position: relative;
   min-height: 100vh;
+  overflow-x: hidden;
   background: var(--color-bg-page);
-  display: flex;
-  flex-direction: column;
 }
 
-/* 加载中 / 查无记录 状态页 */
+.page-bg {
+  z-index: 0;
+}
+
 .state {
-  flex: 1;
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--space-4);
+  padding: var(--space-6);
 }
 
 .state-text {
@@ -33,105 +38,324 @@
 }
 
 .content {
-  flex: 1;
-  height: 100vh;
-  padding: 0 var(--space-4);
+  position: relative;
+  z-index: 1;
+  padding: 0 34rpx;
 }
 
-/* 头部：日期大标题 + 地点行 + 标签 */
 .head {
-  padding: var(--space-6) 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-top: 48rpx;
 }
 
-.date-title {
-  font-size: var(--text-2xl);
-  font-weight: 600;
-  color: var(--color-text-primary);
+.date-kicker {
+  color: #766F63;
+  font-size: 29rpx;
+  font-weight: 400;
   letter-spacing: 2rpx;
 }
 
-.place-row {
-  margin-top: var(--space-2);
-  color: var(--color-text-secondary);
-  font-size: var(--text-base);
+.place-title {
+  margin-top: 14rpx;
+  color: var(--color-text-primary);
+  font-size: 50rpx;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 1rpx;
+  word-break: break-all;
 }
 
-/* 乐观编辑链失败徽标（S8）：与 footprint-card 草稿徽标同风格 */
+.region-line,
+.auxiliary-line {
+  color: #766F63;
+  font-size: 26rpx;
+  line-height: 1.55;
+}
+
+.region-line {
+  margin-top: 14rpx;
+}
+
+.auxiliary-line {
+  margin-top: 4rpx;
+}
+
 .edit-failed-badge {
   display: inline-block;
-  margin-top: var(--space-2);
-  padding: 6rpx 20rpx;
-  font-size: 22rpx;
-  line-height: 1.4;
-  word-break: break-all;
+  margin-top: var(--space-3);
+  padding: 8rpx 20rpx;
   color: #8C3B2E;
   background: #F4E3DC;
   border: 1rpx solid #CBB8A8;
-  border-radius: 999rpx;
+  border-radius: var(--radius-full);
+  font-size: 22rpx;
+  line-height: 1.4;
+  word-break: break-all;
 }
 
-.tags {
+.detail-section {
+  margin-top: 52rpx;
+}
+
+.section-heading {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44rpx;
+  margin-bottom: 22rpx;
 }
 
-/* 备注全文（不截断，FR-11） */
-.note {
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
+.section-title {
+  color: var(--color-text-primary);
+  font-size: 32rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+}
+
+.section-count {
+  color: var(--color-text-secondary);
+  font-size: 26rpx;
+  font-weight: 400;
+}
+
+.note-section {
+  max-width: 100%;
 }
 
 .note-text {
-  color: var(--color-text-primary);
-  font-size: var(--text-base);
-  line-height: 1.7;
+  display: block;
+  color: #5F594F;
+  font-size: 29rpx;
+  line-height: 1.8;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-/* 照片区：三列网格，顺序与记录一致 */
-.photos {
-  margin-bottom: var(--space-4);
+.photo-section {
+  margin-top: 50rpx;
 }
 
-.photo-grid {
+.photo-loading {
+  min-height: 240rpx;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  background: rgba(249, 246, 238, 0.78);
+  border: 1rpx solid var(--color-border-subtle);
+  border-radius: 18rpx;
+  font-size: var(--text-xs);
 }
 
-.photo {
-  width: calc((100% - 2 * var(--space-2)) / 3);
-  height: 226rpx;
-  border-radius: var(--radius-md);
+.photo-frame {
+  width: 100%;
+  overflow: hidden;
   background: var(--color-bg-subtle);
+  border-radius: 18rpx;
 }
 
-.photo-hint {
-  padding: var(--space-2) 0;
+.photo-image {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
-/* 底部固定操作条（编辑=次按钮，删除=主按钮，触控目标 ≥88rpx 由通用类保证） */
+.photo-fallback {
+  min-height: 230rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24rpx;
+  color: var(--color-text-muted);
+  background: rgba(239, 233, 220, 0.78);
+  font-size: 24rpx;
+  text-align: center;
+}
+
+.photo-stack .photo-frame + .photo-frame {
+  margin-top: 12rpx;
+}
+
+.photo-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.photo-column {
+  flex: 1;
+  min-width: 0;
+}
+
+.photo-column .photo-frame + .photo-frame {
+  margin-top: 12rpx;
+}
+
+.info-section {
+  margin-top: 48rpx;
+}
+
+.info-card {
+  padding: 28rpx 30rpx 18rpx;
+  background: rgba(253, 251, 246, 0.9);
+  border: 1rpx solid rgba(85, 76, 63, 0.1);
+  border-radius: 26rpx;
+  box-shadow: var(--shadow-card);
+}
+
+.info-heading {
+  margin-bottom: 10rpx;
+}
+
+.info-row {
+  min-height: 66rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28rpx;
+  border-bottom: 1rpx solid rgba(90, 80, 64, 0.09);
+}
+
+.info-row--last {
+  border-bottom: 0;
+}
+
+.info-label {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: 26rpx;
+}
+
+.info-value {
+  color: #4E4A43;
+  font-size: 26rpx;
+  text-align: right;
+  word-break: break-all;
+}
+
+.map-entry {
+  width: 100%;
+  min-height: 106rpx;
+  display: flex;
+  align-items: center;
+  margin: 32rpx 0 0;
+  padding: 18rpx 26rpx;
+  color: var(--color-text-primary);
+  background: rgba(253, 251, 246, 0.84);
+  border: 1rpx solid rgba(85, 76, 63, 0.12);
+  border-radius: 24rpx;
+  box-shadow: none;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.map-entry::after {
+  border: 0;
+}
+
+.map-entry--pressed {
+  background: rgba(239, 233, 220, 0.9);
+}
+
+.map-entry__icon {
+  flex: none;
+  width: 48rpx;
+  height: 48rpx;
+  margin-right: 20rpx;
+  opacity: 0.88;
+}
+
+.map-entry__copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-entry__title {
+  color: var(--color-text-primary);
+  font-size: 29rpx;
+  font-weight: 500;
+}
+
+.map-entry__meta {
+  margin-top: 5rpx;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 23rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-entry__action {
+  flex: none;
+  margin-left: 20rpx;
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+}
+
 .bottom-spacer {
-  height: 200rpx;
+  height: calc(150rpx + env(safe-area-inset-bottom));
 }
 
 .action-bar {
   position: fixed;
+  z-index: 4;
   left: 0;
   right: 0;
   bottom: 0;
   display: flex;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
-  background: var(--color-bg-surface);
-  border-top: 1rpx solid var(--color-border-subtle);
+  gap: 16rpx;
+  padding: 18rpx 34rpx;
+  padding-bottom: calc(18rpx + env(safe-area-inset-bottom));
+  background: rgba(246, 242, 233, 0.94);
+  border-top: 1rpx solid rgba(90, 80, 64, 0.06);
 }
 
 .action-btn {
+  min-width: 0;
+  min-height: 92rpx;
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 13rpx;
   margin: 0;
+  padding: 14rpx 22rpx;
+  background: rgba(253, 251, 246, 0.92);
+  border-radius: var(--radius-full);
+  box-shadow: none;
+  font-size: 30rpx;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.action-btn::after {
+  border: 0;
+}
+
+.action-btn--edit {
+  color: #403D37;
+  border: 1rpx solid rgba(90, 80, 64, 0.2);
+}
+
+.action-btn--delete {
+  color: var(--color-accent);
+  border: 1rpx solid rgba(168, 71, 55, 0.72);
+}
+
+.action-btn--pressed {
+  opacity: 0.78;
+}
+
+.action-btn[disabled] {
+  opacity: 0.58;
+}
+
+.action-btn__icon {
+  width: 36rpx;
+  height: 36rpx;
 }

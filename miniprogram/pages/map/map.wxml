@@ -6,16 +6,13 @@
   <map id="footprintMap" class="map"
        latitude="{{latitude}}" longitude="{{longitude}}" scale="{{scale}}"
        include-points="{{includePoints}}" markers="{{markers}}" polyline="{{polyline}}"
-       enable-rotate="false" enable-overlooking="false" enable-satellite="false" enable-traffic="false"
+       setting="{{mapSetting}}"
+       enable-zoom="{{true}}" enable-scroll="{{true}}"
+       enable-rotate="{{false}}" enable-overlooking="{{false}}"
+       enable-satellite="{{false}}" enable-traffic="{{false}}"
+       enable-poi="{{false}}" enable-building="{{false}}"
        bindmarkertap="onMarkerTap" bindcallouttap="onCalloutTap"
        bindtap="onMapTap" bindregionchange="onRegionChange">
-    <!-- 原生 map 的同层渲染覆盖：普通 view/image 在真机上会被地图压住，必须使用 cover-*。 -->
-    <cover-view class="map-veil"></cover-view>
-    <cover-image class="map-paper" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
-    <cover-image class="map-ink map-ink--left" src="/assets/map/map-left.png" mode="aspectFill" />
-    <cover-image class="map-ink map-ink--bottom" src="/assets/map/map-bottom.png" mode="aspectFill" />
-    <cover-image class="map-ink map-ink--birds" src="/assets/map/map-birds.png" mode="aspectFit" />
-
     <cover-view slot="callout">
       <cover-view wx:for="{{markerViews}}" wx:key="recordId" marker-id="{{item.markerId}}"
                   class="marker-callout marker-callout--{{item.side}} {{item.selected ? 'marker-callout--selected' : ''}}">
@@ -33,18 +30,32 @@
     </cover-view>
   </map>
 
+  <!-- 普通同层视觉覆盖：不绑定事件且强制触摸穿透，绝不再放进 map 的 cover-* 原生触摸层。 -->
+  <view class="map-visual-layer">
+    <view class="map-veil"></view>
+    <image class="map-ink map-ink--left" src="/assets/map/map-left.png" mode="scaleToFill" />
+    <image class="map-ink map-ink--bottom" src="/assets/map/map-bottom.png" mode="scaleToFill" />
+    <image class="map-ink map-ink--birds" src="/assets/map/map-birds.png" mode="aspectFit" />
+  </view>
+
   <!-- Layer 4：品牌导航 + 统计信息带 + 控件 + 详情卡 -->
   <ink-navbar title-image="/assets/titles/map-title.png" />
 
   <view class="map-stats" style="top: {{statsTop}}px;">
-    <image class="stat-icon" src="/assets/icons/footprint-ink.png" mode="aspectFit" />
-    <view class="stat-item"><text>{{footprintCount}} 处足迹</text></view>
+    <view class="stat-cluster">
+      <image class="stat-icon stat-icon--mountain" src="/assets/tabbar/timeline.png" mode="aspectFit" />
+      <text class="stat-label">{{footprintCount}} 处足迹</text>
+    </view>
     <text class="stat-dot">·</text>
-    <image class="stat-icon" src="/assets/icons/city-ink.png" mode="aspectFit" />
-    <view class="stat-item"><text>{{cityCount}} 座城市</text></view>
+    <view class="stat-cluster">
+      <image class="stat-icon" src="/assets/icons/city-ink.png" mode="aspectFit" />
+      <text class="stat-label">{{cityCount}} 座城市</text>
+    </view>
     <text class="stat-dot">·</text>
-    <image class="stat-icon" src="/assets/icons/location-ink.png" mode="aspectFit" />
-    <view class="stat-item stat-recent"><text>最近：{{recentRegion}}</text></view>
+    <view class="stat-cluster stat-recent">
+      <image class="stat-icon" src="/assets/icons/location-ink.png" mode="aspectFit" />
+      <text class="stat-label stat-label--recent">最近：{{recentRegion}}</text>
+    </view>
     <button class="route-info" bindtap="onRouteInfoTap" aria-label="足迹连线说明">
       <image class="route-info__icon" src="/assets/icons/help-ink.png" mode="aspectFit" />
     </button>

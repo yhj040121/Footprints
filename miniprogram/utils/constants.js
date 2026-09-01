@@ -34,5 +34,6 @@ module.exports = {
 
   // OSS 缩略图白名单 process（契约 §1.3 sign）
   PROCESS_THUMB: 'image/resize,w_300',
-  PROCESS_FULL: 'image/resize,w_1600'
+  PROCESS_FULL: 'image/resize,w_1600',
+  PROCESS_ORIGINAL: ''                 // 详情预览不带 process，签发并加载用户原图
 };

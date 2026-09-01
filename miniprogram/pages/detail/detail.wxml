@@ -1,19 +1,38 @@
-<!-- detail 足迹详情页：日期大标题 / 地点行 / 标签 chips / 备注全文 / 照片三列网格 / 底部固定操作条 -->
+<!-- 足迹详情：旅行记录册信息层级 + 1～9 张原比例照片 + 底部安全区操作。 -->
+<template name="detail-photo">
+  <view class="photo-frame {{extraClass}}">
+    <image
+      wx:if="{{!item.failed}}"
+      class="photo-image"
+      src="{{item.url}}"
+      mode="widthFix"
+      lazy-load="{{true}}"
+      show-menu-by-longpress="{{true}}"
+      data-index="{{item.index}}"
+      aria-label="{{item.ariaLabel}}"
+      bindload="onPhotoLoad"
+      binderror="onPhotoError"
+      bindtap="onPreviewPhoto"
+    />
+    <view wx:else class="photo-fallback" role="img" aria-label="{{item.ariaLabel}}加载失败">
+      <text>图片暂时无法显示</text>
+    </view>
+  </view>
+</template>
+
 <view class="page">
   <image class="page-bg" src="/assets/bg/page-paper-ink.jpg" mode="aspectFill" />
   <mock-badge />
-  <!-- 加载中 -->
+
   <view class="state" wx:if="{{loading}}">
-    <text class="fp-hint">加载中…</text>
+    <text class="fp-hint">正在展开这段旅程…</text>
   </view>
 
-  <!-- 查无记录（含已被删除） -->
   <view class="state" wx:elif="{{notFound}}">
     <view class="state-text">记录不存在或已被删除</view>
     <button class="fp-btn-plain state-btn" bindtap="onBack">返回</button>
   </view>
 
-  <!-- 断网/服务端异常（S6-R3：与「记录不存在」区分，可重试） -->
   <view class="state" wx:elif="{{networkError}}">
     <view class="state-text">网络异常，请检查网络后重试</view>
     <view class="state-btns">
@@ -22,47 +41,98 @@
     </view>
   </view>
 
-  <!-- 正常内容 -->
   <block wx:elif="{{fp}}">
-    <scroll-view scroll-y class="content">
+    <view class="content">
       <view class="head">
-        <view class="date-title">{{dateText}}</view>
-        <view class="place-row">
-          <text class="place-text">{{fp.place}}</text>
-        </view>
-        <!-- 乐观编辑链失败徽标（S8）：点击恢复编辑表单重试 -->
+        <text class="date-kicker">{{dateText}}</text>
+        <text class="place-title">{{fp.place}}</text>
+        <text wx:if="{{regionText}}" class="region-line">{{regionText}}</text>
+        <text wx:if="{{auxiliaryText}}" class="auxiliary-line">{{auxiliaryText}}</text>
         <view wx:if="{{editFailed}}" class="edit-failed-badge" bindtap="onRetryEdit">
           <text>{{editError || '修改未保存成功'}} · 点击处理</text>
         </view>
-        <!-- 标签展示：标签体系待重写（S8），暂不下发 -->
       </view>
 
-      <view class="note fp-card" wx:if="{{fp.note}}">
+      <view wx:if="{{fp.note}}" class="detail-section note-section">
+        <view class="section-heading">
+          <text class="section-title">此刻</text>
+        </view>
         <text class="note-text">{{fp.note}}</text>
       </view>
 
-      <view class="photos" wx:if="{{fp.photos && fp.photos.length}}">
-        <view class="photo-grid" wx:if="{{photoUrls.length}}">
-          <image
-            wx:for="{{photoUrls}}"
-            wx:key="index"
-            class="photo"
-            src="{{item}}"
-            mode="aspectFill"
-            data-index="{{index}}"
-            bindtap="onPreviewPhoto"
-          />
+      <view wx:if="{{photoCount > 0}}" class="detail-section photo-section">
+        <view class="section-heading">
+          <text class="section-title">今日影像</text>
+          <text class="section-count">{{photoCountText}}</text>
         </view>
-        <view class="fp-hint photo-hint" wx:if="{{photoFailed}}">照片加载失败，重新进入可重试</view>
+
+        <view wx:if="{{photoLoading}}" class="photo-loading">正在展开照片…</view>
+
+        <block wx:if="{{!photoLoading}}">
+          <template wx:if="{{mainPhoto}}" is="detail-photo" data="{{item: mainPhoto, extraClass: 'photo-frame--main'}}" />
+
+          <view wx:if="{{stackPhotos.length}}" class="photo-stack">
+            <block wx:for="{{stackPhotos}}" wx:key="index">
+              <template is="detail-photo" data="{{item: item, extraClass: 'photo-frame--full'}}" />
+            </block>
+          </view>
+
+          <view wx:if="{{photoLeft.length || photoRight.length}}" class="photo-columns">
+            <view class="photo-column">
+              <block wx:for="{{photoLeft}}" wx:key="index">
+                <template is="detail-photo" data="{{item: item, extraClass: 'photo-frame--column'}}" />
+              </block>
+            </view>
+            <view class="photo-column">
+              <block wx:for="{{photoRight}}" wx:key="index">
+                <template is="detail-photo" data="{{item: item, extraClass: 'photo-frame--column'}}" />
+              </block>
+            </view>
+          </view>
+        </block>
       </view>
 
-      <!-- 底部操作条占位，防内容被遮挡 -->
+      <view class="detail-section info-section">
+        <view class="info-card">
+          <view class="section-heading info-heading">
+            <text class="section-title">足迹信息</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">日期</text>
+            <text class="info-value">{{dateText}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">地区</text>
+            <text class="info-value">{{regionText || '未记录'}}</text>
+          </view>
+          <view class="info-row info-row--last">
+            <text class="info-label">照片</text>
+            <text class="info-value">{{photoCountText}}</text>
+          </view>
+        </view>
+      </view>
+
+      <button wx:if="{{hasCoordinates}}" class="map-entry" hover-class="map-entry--pressed" bindtap="onViewMap">
+        <image class="map-entry__icon" src="/assets/icons/location-ink.png" mode="aspectFit" />
+        <view class="map-entry__copy">
+          <text class="map-entry__title">在地图中查看</text>
+          <text class="map-entry__meta">{{regionText || fp.place}}</text>
+        </view>
+        <text class="map-entry__action">查看</text>
+      </button>
+
       <view class="bottom-spacer"></view>
-    </scroll-view>
+    </view>
 
     <view class="action-bar">
-      <button class="fp-btn-plain action-btn" bindtap="onEdit">编辑</button>
-      <button class="fp-btn-primary action-btn" loading="{{deleting}}" disabled="{{deleting}}" bindtap="onDelete">删除</button>
+      <button class="action-btn action-btn--edit" hover-class="action-btn--pressed" bindtap="onEdit">
+        <image class="action-btn__icon" src="/assets/icons/edit-ink.png" mode="aspectFit" />
+        <text>编辑记录</text>
+      </button>
+      <button class="action-btn action-btn--delete" hover-class="action-btn--pressed" loading="{{deleting}}" disabled="{{deleting}}" bindtap="onDelete">
+        <image class="action-btn__icon" src="/assets/icons/delete-vermilion.png" mode="aspectFit" />
+        <text>删除</text>
+      </button>
     </view>
   </block>
 </view>

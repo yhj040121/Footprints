@@ -42,7 +42,7 @@ function assetUrlFor(key) {
   if (map[key]) return map[key];
   // 种子数据：travel/YYYY/MM/DD/mockNN.jpg → /assets/mock/mNN.png
   const m = /mock(\d+)\./.exec(key);
-  if (m) return '/assets/mock/m' + m[1] + '.png';
+  if (m) return '/assets/mock/m' + Number(m[1]) + '.png';
   return '/assets/mock/m1.png';
 }
 
