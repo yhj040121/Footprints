@@ -228,6 +228,9 @@ function listWithLocation(options) {
 // 详情：按 id 取单条（S7-R1：doc().get() 在自定义规则下不满足子集检查，改 where({_id, _openid})）
 // S6-R3：区分「记录不存在/无权限」与「网络/服务端异常」——前者返回 null，后者抛 { network:true }，
 // 供详情页断网时展示「网络错误」而非误报「记录不存在」
+// S9：数据库暂不可见（云函数刚写成功、客户端读有写入一致性延迟）时返回 null 会被 readThrough
+// 缓存成毒数据（15 分钟内详情页误报「记录不存在」）——loader 内先用近期写入快照填补，绝不缓存 null；
+// 数据库可见且与快照一致后，下方 sameFootprintShape 命中会删除 recent 并切回数据库版本。
 function getFootprint(id, options) {
   return readThrough('detail:' + id, options, () => {
     if (config.USE_MOCK) {
@@ -236,6 +239,7 @@ function getFootprint(id, options) {
     }
     return db().collection(COLLECTION).where({ _id: id, _openid: '{openid}' }).limit(1).get()
       .then((res) => (res.data && res.data[0]) || null)
+      .then((record) => record || getRecentFootprint(id))
       .catch((err) => {
         const msg = (err && err.errMsg) || '';
         if (/not exist|not found|does not exist|permission|deny|invalid/i.test(msg)) return null;
