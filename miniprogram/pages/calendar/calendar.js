@@ -1,7 +1,7 @@
 // FR-09 日历视图
 // 加载纪律（FR-09 验收 4）：先渲染 42 格日期数字，再异步补记录标记与缩略图——
-// db.listByMonth 拉当月记录按 date 归组 → 逐日取「最新一条有图记录」首图 key →
-// 一次 ossSts.sign（process=PROCESS_THUMB）批量签发 → 回填格子与当日卡片封面。
+// db.listByMonth 拉当月记录按 date 归组 → 逐日取「最新一条有图记录」首图；
+// 近期写入先直显本地 url，正式记录则批量签发首图 key → 回填格子与当日卡片封面。
 const db = require('../../utils/db');
 const dateUtil = require('../../utils/date');
 const constants = require('../../utils/constants');
@@ -27,7 +27,7 @@ Page({
   },
 
   onLoad() {
-    this._cache = {};   // 'YYYY-MM' → { byDate: {date: [records]}, thumbKey: {date: key|null}, urls: {key: {url, expireAt}} }
+    this._cache = {};   // 'YYYY-MM' → { byDate, thumbKey, thumbLocal, urls }
     this._loadSeq = 0;  // 切月竞态令牌
     this._skipShowRefresh = true;
     const todayStr = dateUtil.today();
@@ -155,11 +155,14 @@ Page({
       (byDate[r.date] = byDate[r.date] || []).push(r);
     });
     const thumbKey = {};
+    const thumbLocal = {};
     Object.keys(byDate).forEach((d) => {
       const hit = byDate[d].filter((r) => (r.photos || []).length > 0)[0];
-      thumbKey[d] = hit ? hit.photos[0].key : null;
+      const first = hit && hit.photos[0];
+      thumbKey[d] = first && first.key ? first.key : null;
+      thumbLocal[d] = first && first.url ? first.url : '';
     });
-    return { byDate, thumbKey, urls: contentCache.getSignedMap(constants.PROCESS_THUMB) };
+    return { byDate, thumbKey, thumbLocal, urls: contentCache.getSignedMap(constants.PROCESS_THUMB) };
   },
 
   // 回填格子：hasRecord（有记录，无图时加粗数字标记）/ dot（无图或签名失败降级）/
@@ -168,12 +171,13 @@ Page({
     const cells = this.data.cells.map((c) => {
       if (!c.inMonth) return Object.assign({}, c, { hasRecord: false, dot: false, thumb: '', loading: false });
       const key = entry.thumbKey[c.date];
+      const local = entry.thumbLocal[c.date] || '';
       const signed = key && entry.urls[key];
       return Object.assign({}, c, {
         hasRecord: !!entry.byDate[c.date],
-        dot: !!entry.byDate[c.date] && (!key || (!!entry.signFailed && !signed)),
-        thumb: withThumbs && signed ? signed.url : '',
-        loading: !!key && !signed && !entry.signFailed
+        dot: !!entry.byDate[c.date] && (!key && !local || (!!entry.signFailed && !signed && !local)),
+        thumb: local || (withThumbs && signed ? signed.url : ''),
+        loading: !!key && !signed && !local && !entry.signFailed
       });
     });
     this.setData({ cells });
@@ -188,7 +192,7 @@ Page({
     Object.keys(entry.byDate).forEach((d) => {
       entry.byDate[d].forEach((r) => {
         const p = (r.photos || [])[0];
-        if (p && keys.indexOf(p.key) < 0) keys.push(p.key);
+        if (p && p.key && keys.indexOf(p.key) < 0) keys.push(p.key);
       });
     });
     const now = Date.now();
@@ -233,7 +237,7 @@ Page({
         place: r.place,
         note: r.note || '',
         tags: r.tags || [],
-        coverUrl: signed ? signed.url : ''
+        coverUrl: (p && p.url) || (signed ? signed.url : '')
       };
     });
     this.setData({

@@ -42,23 +42,18 @@
   <ink-navbar title-image="/assets/titles/map-title.png" />
 
   <view class="map-stats" style="top: {{statsTop}}px;">
-    <view class="stat-cluster">
+    <view class="stat-cluster stat-cluster--footprints">
       <image class="stat-icon stat-icon--mountain" src="/assets/tabbar/timeline.png" mode="aspectFit" />
       <text class="stat-label">{{footprintCount}} 处足迹</text>
     </view>
-    <text class="stat-dot">·</text>
-    <view class="stat-cluster">
+    <view class="stat-cluster stat-cluster--cities">
       <image class="stat-icon" src="/assets/icons/city-ink.png" mode="aspectFit" />
       <text class="stat-label">{{cityCount}} 座城市</text>
     </view>
-    <text class="stat-dot">·</text>
     <view class="stat-cluster stat-recent">
       <image class="stat-icon" src="/assets/icons/location-ink.png" mode="aspectFit" />
       <text class="stat-label stat-label--recent">最近：{{recentRegion}}</text>
     </view>
-    <button class="route-info" bindtap="onRouteInfoTap" aria-label="足迹连线说明">
-      <image class="route-info__icon" src="/assets/icons/help-ink.png" mode="aspectFit" />
-    </button>
   </view>
 
   <view wx:if="{{empty}}" class="empty-hint">
@@ -70,10 +65,9 @@
     <text class="empty-desc">请稍后再试</text>
   </view>
 
-  <!-- 定位墨圈（§29：不规则墨圈 + 准星素材，文字仍由 WXML 绘制） -->
+  <!-- 定位：简洁纸面圆钮 + 定位准星。 -->
   <button class="locate-btn {{card ? 'locate-btn--up' : ''}}" bindtap="onLocate" loading="{{locating}}" hover-class="locate-btn--hover" aria-label="定位我">
-    <image class="locate-btn__bg" src="/assets/map/locate-ink.png" mode="aspectFit" />
-    <text class="locate-btn__text">定位我</text>
+    <image class="locate-btn__image" src="/assets/map/locate-button.png" mode="aspectFit" />
   </button>
 
   <!-- 底部浮动详情卡（§30：Floating Surface + 轻阴影；§31 查看记录用墨刷按钮） -->
@@ -86,9 +80,8 @@
           <text wx:if="{{card.regionText}}" class="card-region">{{card.regionText}}</text>
           <text class="card-meta">{{card.dateText}}　{{card.photoCount}}张照片</text>
         </view>
-        <button class="brush-btn view-record" bindtap="onCardTap">
-          <image class="brush-btn__bg" src="/assets/buttons/brush-dark.png" mode="scaleToFill" />
-          <text class="brush-btn__text">查看记录</text>
+        <button class="view-record" hover-class="view-record--hover" bindtap="onCardTap">
+          <image class="view-record__image" src="/assets/map/record-button.png" mode="aspectFit" />
         </button>
       </view>
       <view wx:if="{{card.previews.length}}" class="preview-row">

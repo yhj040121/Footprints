@@ -431,16 +431,6 @@ Page({
     if (this.data.card) wx.navigateTo({ url: '/pages/detail/detail?id=' + this.data.card.id });
   },
 
-  onRouteInfoTap() {
-    wx.showModal({
-      title: '足迹连线说明',
-      content: '足迹连线仅表示记录的先后顺序，不代表真实行走路线。',
-      showCancel: false,
-      confirmText: '知道了',
-      confirmColor: '#35322C'
-    });
-  },
-
   onLocate() {
     if (this.data.locating) return;
     this.setData({ locating: true });

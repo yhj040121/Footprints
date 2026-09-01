@@ -42,6 +42,10 @@ global.getCurrentPages = () => currentPages;
 
 const db = require('../miniprogram/utils/db');
 const save = require('../miniprogram/pages/add/save');
+let calendarPage = null;
+global.Page = (definition) => { calendarPage = definition; };
+require('../miniprogram/pages/calendar/calendar');
+delete global.Page;
 
 (async () => {
   const recent = {
@@ -80,6 +84,22 @@ const save = require('../miniprogram/pages/add/save');
 
   const summary = await db.stats({ force: true });
   assert.deepStrictEqual(summary, { days: 1, footprints: 1, photos: 1 });
+
+  // 新记录处于近期写入阶段时只有本地 url，日历格子和当日卡片也必须立即显示首图。
+  const calendarContext = {
+    data: {
+      cells: [{ date: recent.date, inMonth: true }],
+      selectedDate: recent.date,
+      dayRecords: []
+    },
+    setData(patch) { Object.assign(this.data, patch); }
+  };
+  const calendarEntry = calendarPage._buildEntry.call(calendarContext, [recent]);
+  calendarPage._paint.call(calendarContext, calendarEntry, false);
+  calendarPage._renderDayList.call(calendarContext, calendarEntry);
+  assert.strictEqual(calendarContext.data.cells[0].thumb, 'wxfile://recent.jpg');
+  assert.strictEqual(calendarContext.data.cells[0].loading, false);
+  assert.strictEqual(calendarContext.data.dayRecords[0].coverUrl, 'wxfile://recent.jpg');
 
   // 新照片的正式 key 无法由客户端预知：客户端数据库即使短暂返回旧快照，也不能覆盖本地新图。
   dbRows = [Object.assign({}, recent, { photos: [{ key: 'travel/2026/09/01/aaaaaaaaaaaaaaaa.jpg' }] })];
@@ -156,7 +176,7 @@ const save = require('../miniprogram/pages/add/save');
   dbRows = [];
   assert.strictEqual(await db.getFootprint(recent._id, { force: true }), null);
 
-  console.log('客户端回归通过：近期写入、地图刷新、编辑地址字段');
+  console.log('客户端回归通过：近期写入、日历本地图、地图刷新、编辑地址字段');
 })().catch((error) => {
   console.error(error);
   process.exit(1);

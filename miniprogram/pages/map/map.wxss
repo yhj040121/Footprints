@@ -77,9 +77,9 @@
   right: 0;
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 0;
   height: 82rpx;
-  padding: 0 22rpx;
+  padding: 0 18rpx;
   border-radius: 0;
   background: rgba(248, 245, 237, 0.90);
   box-shadow: 0 1rpx 0 rgba(85, 76, 63, 0.08), 0 8rpx 20rpx rgba(55, 48, 38, 0.03);
@@ -102,18 +102,18 @@
   display: flex;
   align-items: center;
   gap: 7rpx;
-  flex-shrink: 0;
+  flex: 0 1 auto;
   min-width: 0;
+}
+.stat-cluster + .stat-cluster {
+  margin-left: 16rpx;
+  padding-left: 16rpx;
+  border-left: 1rpx solid rgba(91, 78, 57, 0.18);
 }
 .stat-label {
   color: #49443B;
   line-height: 1;
   white-space: nowrap;
-}
-.stat-dot {
-  color: #8E8779;
-  font-size: 28rpx;
-  line-height: 1;
 }
 .stat-recent {
   flex: 1;
@@ -124,32 +124,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.route-info {
-  margin: 0 0 0 auto;
-  width: 52rpx;
-  height: 52rpx;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-full);
-  background: transparent;
-}
-.route-info::after { border: 0; }
-.route-info__icon {
-  width: 48rpx;
-  height: 48rpx;
-  opacity: 0.70;
-}
-
 @media (max-width: 350px) {
-  .map-stats { gap: 7rpx; padding: 0 16rpx; font-size: 22rpx; }
+  .map-stats { padding: 0 12rpx; font-size: 22rpx; }
   .stat-cluster { gap: 4rpx; }
+  .stat-cluster + .stat-cluster { margin-left: 9rpx; padding-left: 9rpx; }
   .stat-icon { width: 29rpx; height: 29rpx; }
   .stat-icon--mountain { width: 38rpx; height: 32rpx; }
-  .stat-dot { font-size: 24rpx; }
-  .route-info { width: 46rpx; height: 46rpx; }
-  .route-info__icon { width: 42rpx; height: 42rpx; }
 }
 
 /* ---------- Marker callout（§27：无白色胶囊，完全透明背景；圆形照片 + 地点文字 + 短墨线） ---------- */
@@ -233,7 +213,7 @@
 .empty-title { font-size: 28rpx; color: var(--color-text-primary); font-weight: 500; }
 .empty-desc { font-size: 22rpx; color: var(--color-text-muted); }
 
-/* ---------- 定位墨圈（§29） ---------- */
+/* ---------- 定位按钮：使用完整水墨按钮素材 ---------- */
 .locate-btn {
   position: absolute;
   right: var(--space-4);
@@ -242,32 +222,25 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 116rpx;
-  height: 116rpx;
+  width: 104rpx;
+  height: 104rpx;
   padding: 0;
   border-radius: var(--radius-full);
   background: transparent;
+  border: 0;
   box-shadow: none;
   line-height: 1;
   z-index: 50;
 }
 .locate-btn::after { border: none; }
-.locate-btn--hover { opacity: 0.8; }
+.locate-btn--hover { opacity: 0.78; }
 .locate-btn--up {
   bottom: calc(480rpx + env(safe-area-inset-bottom));
 }
-.locate-btn__bg {
-  position: absolute;
-  inset: 0;
-  width: 116rpx;
-  height: 116rpx;
-  pointer-events: none;
-}
-.locate-btn__text {
-  position: relative;
-  font-size: 20rpx;
-  color: var(--color-text-primary);
-  margin-top: 30rpx;
+.locate-btn__image {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* ---------- 底部浮动详情卡（§30：Floating Surface，高 220~232rpx，圆角 28~32rpx） ---------- */
@@ -326,13 +299,25 @@
 }
 .card-meta { font-size: 22rpx; color: var(--color-text-muted); }
 
-/* 查看记录：墨刷按钮（§31：brush-dark 素材 + WXML 叠字，非普通圆角矩形） */
+/* 查看记录：使用用户提供的完整水墨按钮素材。 */
 .view-record {
   flex: none;
   width: 176rpx;
-  height: 60rpx;
+  height: 59rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin: 4rpx 0 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 30rpx;
+  box-shadow: none;
+  line-height: 1;
 }
+.view-record::after { border: 0; }
+.view-record--hover { opacity: 0.78; }
+.view-record__image { display: block; width: 100%; height: 100%; }
 
 .preview-row {
   display: flex;

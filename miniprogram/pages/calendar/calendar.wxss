@@ -109,6 +109,18 @@
   background: var(--color-bg-hover);
 }
 
+/* 无图日期选中时用更暖、更深的纸色与墨褐投影，避免和页面底色融在一起。 */
+.cell-inner--selected-empty {
+  background: #E9DFCC;
+  border-color: rgba(112, 91, 59, 0.16);
+  box-shadow: 0 6rpx 16rpx rgba(91, 72, 48, 0.22);
+}
+
+.cell-inner--selected-empty .cell-day {
+  color: #3C3429;
+  font-weight: 600;
+}
+
 /* 当天有记录但无首图：加粗日期数字作标记 */
 .cell-inner--has-record .cell-day {
   font-weight: 600;

@@ -53,13 +53,6 @@
         </view>
       </view>
 
-      <view wx:if="{{fp.note}}" class="detail-section note-section">
-        <view class="section-heading">
-          <text class="section-title">此刻</text>
-        </view>
-        <text class="note-text">{{fp.note}}</text>
-      </view>
-
       <view wx:if="{{photoCount > 0}}" class="detail-section photo-section">
         <view class="section-heading">
           <text class="section-title">今日影像</text>
@@ -90,6 +83,13 @@
             </view>
           </view>
         </block>
+      </view>
+
+      <view wx:if="{{fp.note}}" class="detail-section note-section">
+        <view class="section-heading">
+          <text class="section-title">此刻</text>
+        </view>
+        <text class="note-text">{{fp.note}}</text>
       </view>
 
       <view class="detail-section info-section">
