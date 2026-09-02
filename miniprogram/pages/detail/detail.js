@@ -189,6 +189,8 @@ Page({
   onUnload() {
     // 作废在途加载与延迟重查（S10）：页面销毁后不再 setData
     this._loadSeq = (this._loadSeq || 0) + 1;
+    if (this._draftCleanupTimer) clearTimeout(this._draftCleanupTimer);
+    this._draftCleanupTimer = null;
   },
 
   loadDetail(options) {
@@ -251,18 +253,23 @@ Page({
         notFound: true,
         networkError: false,
         fp: null,
-        isLocalDraft: false
+        isLocalDraft: false,
+        publishState: '',
+        publishStatusTitle: '',
+        publishStatusText: '',
+        publishStatusAction: ''
       }, emptyPhotoPatch()));
       return;
     }
     const failed = draft.status === 'failed';
     this.loadedOnce = true;
+    this.scheduleFailedDraftCleanup(draft);
     this.applyFootprint(draftToFootprint(draft), {
       localDraft: true,
       publishState: failed ? 'failed' : 'syncing',
       publishStatusTitle: failed ? '发布未通过' : '内容审核中',
       publishStatusText: failed
-        ? ((draft.error || '内容未通过审核') + '，请修改内容后重新发布。')
+        ? ((draft.error || '内容未通过审核') + '，请在 3 小时内修改；到期后将自动清理。')
         : '当前内容已保存在本机，审核通过后才会正式发布。',
       publishStatusAction: failed ? '修改内容' : ''
     });
@@ -272,6 +279,8 @@ Page({
   // 客户端数据库尚未可见，也会立即得到同一份内容，不再出现「加载后无记录」。
   onDraftPublished(footprintId) {
     if (!footprintId) return;
+    if (this._draftCleanupTimer) clearTimeout(this._draftCleanupTimer);
+    this._draftCleanupTimer = null;
     this.fpId = footprintId;
     this.draftId = '';
     this.setData({
@@ -282,6 +291,24 @@ Page({
       publishStatusAction: ''
     });
     this.loadDetail({ force: true });
+  },
+
+  scheduleFailedDraftCleanup(draft) {
+    if (this._draftCleanupTimer) clearTimeout(this._draftCleanupTimer);
+    this._draftCleanupTimer = null;
+    const expiresAt = drafts.failedExpiresAt(draft);
+    if (!expiresAt) return;
+    const delay = Math.max(0, expiresAt - Date.now()) + 50;
+    this._draftCleanupTimer = setTimeout(() => {
+      this._draftCleanupTimer = null;
+      const current = drafts.get(this.draftId); // get 会同步剔除已满三小时的失败草稿
+      if (current) {
+        this.scheduleFailedDraftCleanup(current);
+        return;
+      }
+      wx.showToast({ title: '审核失败记录已自动清理', icon: 'none' });
+      this.loadDraftDetail();
+    }, delay);
   },
 
   applyFootprint(fp, options) {

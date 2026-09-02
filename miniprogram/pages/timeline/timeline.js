@@ -43,6 +43,11 @@ Page({
     this.loadFirst();
   },
 
+  onUnload() {
+    if (this._draftCleanupTimer) clearTimeout(this._draftCleanupTimer);
+    this._draftCleanupTimer = null;
+  },
+
   onShow() {
     const tb = this.getTabBar && this.getTabBar();
     if (tb) tb.setSelected(0);
@@ -89,6 +94,7 @@ Page({
         this._loadedOnce = true;
         this.setData({ list, hasMore: res.hasMore, loading: false });
         this.signCovers(list.filter((it) => !it.isDraft));
+        this.scheduleFailedDraftCleanup();
       })
       .catch(() => {
         this.setData({ loading: false, loginError: true, list: [] });
@@ -203,11 +209,48 @@ Page({
     list.forEach((d) => {
       if (d.status === 'syncing' && now - (d.createdAt || 0) > STALE_DRAFT_MS) {
         d.status = 'failed';
+        d.failedAt = now;
         d.error = d.error || '保存中断，请点击重试';
         changed = true;
       }
     });
     if (changed) drafts.saveAll(list);
+  },
+
+  // 小程序在前台停留时，到达最近一条失败草稿的三小时期限便立即刷新本地列表；
+  // 进入后台导致定时器暂停也没关系，onShow/loadFirst 会通过 drafts.listAll 补清理。
+  scheduleFailedDraftCleanup() {
+    if (this._draftCleanupTimer) clearTimeout(this._draftCleanupTimer);
+    this._draftCleanupTimer = null;
+    const expires = drafts.listAll()
+      .map((draft) => drafts.failedExpiresAt(draft))
+      .filter((value) => value > 0);
+    if (!expires.length) return;
+    const delay = Math.max(0, Math.min.apply(null, expires) - Date.now()) + 50;
+    this._draftCleanupTimer = setTimeout(() => {
+      this._draftCleanupTimer = null;
+      this.removeExpiredDraftsFromView();
+      this.scheduleFailedDraftCleanup();
+    }, delay);
+  },
+
+  removeExpiredDraftsFromView() {
+    const active = {};
+    drafts.listAll().forEach((draft) => { active[draft.id] = true; });
+    const next = [];
+    this.data.list.forEach((item) => {
+      if (item.isDraft && !active[item._id]) return;
+      if (item.editDraftId && !active[item.editDraftId]) {
+        next.push(Object.assign({}, item, {
+          editDraftId: '',
+          draftStatus: '',
+          draftError: ''
+        }));
+        return;
+      }
+      next.push(item);
+    });
+    this.setData({ list: applyGrouping(next) });
   },
 
   createdAtTs(rec) {

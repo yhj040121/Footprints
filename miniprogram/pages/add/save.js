@@ -346,6 +346,7 @@ module.exports = {
     if (err && err.cancelled) return;
     const draft = drafts.get(ctx.draftId) || Object.assign({ id: ctx.draftId, clientSaveId: ctx.clientSaveId, createdAt: Date.now() }, snap);
     draft.status = 'failed';
+    draft.failedAt = Date.now();
     draft.error = errorText.secErrorText(err);
     if (err && err.code === 2005) {
       // 换新 photoId 整链重走（恢复草稿后重试即生效）
@@ -561,6 +562,7 @@ module.exports = {
       createdAt: Date.now()
     }, snap);
     draft.status = 'failed';
+    draft.failedAt = Date.now();
     draft.error = errorText.secErrorText(err);
     if (err && err.code === 2005) {
       draft.photos = draft.photos.map((p) => (p.isOld ? p : Object.assign({}, p, {
