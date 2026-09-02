@@ -53,6 +53,18 @@ global.wx.cloud = {
     return new Promise((resolve) => setTimeout(() => {
       if (name === 'secCheck' && data.action === 'text') {
         resolve({ result: { code: 0, message: 'OK', data: { pass: true, results: [] } } });
+      } else if (name === 'geoResolve') {
+        resolve({ result: { code: 0, message: 'OK', data: {
+          place: data.fallbackPlace || '腾讯定位地点',
+          address: '浙江省杭州市临安区青山湖街道',
+          province: '浙江省',
+          city: '杭州市',
+          district: '临安区',
+          adcode: '330112',
+          cityLabel: '杭州',
+          lat: data.lat,
+          lng: data.lng
+        } } });
       } else if (name === 'secCheck' && data.action === 'commitSave') {
         const fid = crypto.createHash('sha256')
           .update(OPENID + ':' + data.clientSaveId).digest('hex').slice(0, 32);
@@ -99,6 +111,7 @@ function buildPage() {
       date: '2026-09-01', place: '西塘古镇', note: '刚记录',
       address: '浙江省嘉兴市', province: '浙江省', city: '嘉兴市',
       district: '', adcode: '', cityLabel: '嘉兴', locationSource: 'choose',
+      locationResolving: false,
       photos: []
     },
     _lat: 30.9, _lng: 120.8,
@@ -183,7 +196,31 @@ async function createAndOpenDetail(name, listLag, pointLag, reopen) {
   const detailPhotos = await db.getFootprint('fp_photos_recent', { force: true });
   assert.strictEqual(detailPhotos.photos[0].url, 'wxfile://local.jpg', '窗口期详情保留本地乐观图');
 
-  console.log('客户端可见性回归通过：列表/点查可见性错位、刷新再开、毒缓存自愈、照片乐观窗口');
+  // G：逆地址解析仍在途时禁止截取不完整快照；异常路径即使拿到空地区快照，
+  // 后台提交前也必须重新解析并把腾讯省市区写入正式记录。
+  serverRows.length = 0;
+  const blocked = buildPage();
+  blocked.data.locationResolving = true;
+  save.onSave.call(blocked);
+  assert.strictEqual(blocked._clientSaveId, null, '逆地址解析中不得开始保存');
+  assert.strictEqual(serverRows.length, 0, '逆地址解析中不得提交正式记录');
+
+  const recovered = buildPage();
+  Object.assign(recovered.data, {
+    place: '青山智汇城',
+    address: '', province: '', city: '', district: '', adcode: '', cityLabel: '',
+    locationSource: 'current',
+    locationResolving: false
+  });
+  save.onSave.call(recovered);
+  await new Promise((r) => setTimeout(r, 700));
+  assert.strictEqual(serverRows.length, 1, '缺失地区的坐标快照应在后台补全后提交');
+  assert.strictEqual(serverRows[0].row.place, '青山智汇城', '用户地点名称保持原文');
+  assert.strictEqual(serverRows[0].row.province, '浙江省');
+  assert.strictEqual(serverRows[0].row.city, '杭州市');
+  assert.strictEqual(serverRows[0].row.district, '临安区');
+
+  console.log('客户端可见性回归通过：读可见性、照片乐观窗口、定位快照补全');
 })().catch((error) => {
   console.error(error);
   process.exit(1);

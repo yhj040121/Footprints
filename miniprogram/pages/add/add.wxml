@@ -98,7 +98,7 @@
     </view>
   </view>
 
-  <button class="fp-btn-primary save-btn" bindtap="onSave" disabled="{{saving}}">
+  <button class="fp-btn-primary save-btn" bindtap="onSave" disabled="{{saving || locationResolving}}">
     {{isEdit ? '保存修改' : '保存'}}
   </button>
 

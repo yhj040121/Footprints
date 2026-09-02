@@ -27,19 +27,21 @@ function buildRegionText(fp) {
     if (part && result.indexOf(part) < 0) result.push(part);
   });
   if (!result.length) {
-    // S9 兜底链（与 map.js regionText 口径对齐）：省市区全空时，
-    // 退化到 cityLabel → address → place，让"地区"栏至少显示可读内容，
-    // 避免详情页"V1.3 之前老记录/逆解析失败/写入可见性延迟"等场景下整栏显示「未记录」。
+    // 结构化地区缺失时只接受逆解析地址兜底，绝不能拿用户输入的 place 冒充地区。
     const cityLabel = cleanRegionName(fp && fp.cityLabel);
     if (cityLabel) result.push(cityLabel);
     else if (fp && fp.address && String(fp.address).trim()) result.push(String(fp.address).trim());
-    else if (fp && fp.place && String(fp.place).trim()) result.push(String(fp.place).trim());
   }
   return result.join(' · ');
 }
 
 function buildBelongingText(fp) {
   return cleanRegionName(fp && (fp.belongingArea || fp.cityLabel || fp.city || fp.province));
+}
+
+function hasStructuredRegion(fp) {
+  return ['province', 'city', 'district', 'adcode', 'cityLabel']
+    .some((field) => String((fp && fp[field]) || '').trim());
 }
 
 function hasValidCoordinates(fp) {
@@ -216,6 +218,7 @@ Page({
           return;
         }
         this.applyFootprint(fp);
+        this.resolveMissingRegion(fp, seq);
       })
       .catch((err) => {
         if (seq !== this._loadSeq) return;
@@ -344,6 +347,36 @@ Page({
     });
     if (!opts.localDraft) this.refreshEditDraftBadge();
     this.signPhotos(displayFp);
+  },
+
+  // 兼容已经入库但省市区缺失的记录：只要仍有真实坐标，就重新调用腾讯逆地址解析。
+  // 解析结果写入详情缓存，避免每次 onShow 重复请求；place 始终保留用户原文，不被覆盖。
+  resolveMissingRegion(fp, loadSeq) {
+    if (!fp || !hasValidCoordinates(fp) || hasStructuredRegion(fp)) return;
+    return request.callFunction('geoResolve', {
+      lat: Number(fp.lat),
+      lng: Number(fp.lng),
+      fallbackPlace: fp.place || ''
+    }).then((region) => {
+      if (loadSeq !== this._loadSeq || !region) return;
+      const enriched = Object.assign({}, fp);
+      ['address', 'province', 'city', 'district', 'adcode', 'cityLabel'].forEach((field) => {
+        enriched[field] = String(region[field] || '').trim();
+      });
+      const regionText = buildRegionText(enriched);
+      if (!regionText) return;
+      const belongingText = buildBelongingText(enriched);
+      const auxiliaryParts = [];
+      if (this.data.photoCount) auxiliaryParts.push(this.data.photoCount + ' 张照片');
+      if (belongingText) auxiliaryParts.push('足迹归属：' + belongingText);
+      contentCache.setContent('detail:' + fp._id, enriched);
+      this.setData({
+        fp: enriched,
+        regionText,
+        belongingText,
+        auxiliaryText: auxiliaryParts.join(' · ')
+      });
+    }).catch(() => {});
   },
 
   refreshEditDraftBadge() {

@@ -70,6 +70,12 @@ function validateSaveInput(event, oldTags) {
   if (adcode && !/^[0-9A-Za-z-]+$/.test(adcode)) throw new BizError(1001);
   const locationSource = optionalText('locationSource', 10);
   if (locationSource && !['current', 'choose', 'legacy', 'manual'].includes(locationSource)) throw new BizError(1001);
+  // 实时定位/地图选点必须携带腾讯逆解析得到的结构化地区，防止异步竞态把用户输入的
+  // place 当作地区落库。手动地区和 V1.3 前 legacy 记录维持兼容。
+  if (hasLat && (locationSource === 'current' || locationSource === 'choose') &&
+      ![province, city, district, adcode, cityLabel].some(Boolean)) {
+    throw new BizError(1001);
+  }
 
   // note：≤500 字，缺省 ""
   const note = event.note === undefined || event.note === null ? '' : event.note;

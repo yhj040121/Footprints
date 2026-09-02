@@ -86,6 +86,11 @@ function optimisticFootprint(footprintId, snap, createdAt) {
   };
 }
 
+function hasStructuredRegion(record) {
+  return ['province', 'city', 'district', 'adcode', 'cityLabel']
+    .some((field) => String((record && record[field]) || '').trim());
+}
+
 /** 后台编辑链落定后刷新详情页（若其在页面栈中且正是本条记录） */
 function refreshDetail(footprintId) {
   try {
@@ -101,6 +106,12 @@ function refreshDetail(footprintId) {
 module.exports = {
   onSave() {
     if (this.data.saving) return;
+    // 位置按钮拿到坐标后，腾讯逆地址解析仍可能在途。此时若立即截快照，正式记录会只带
+    // 用户输入的 place 而丢失省市区；必须等解析落定后再允许发布。
+    if (this.data.locationResolving) {
+      wx.showToast({ title: '正在识别地区，请稍候', icon: 'none' });
+      return;
+    }
     const place = (this.data.place || '').trim();
     if (!place) {
       this.setData({ placeError: '请填写地点' });
@@ -274,8 +285,52 @@ module.exports = {
     };
   },
 
+  // 防御性补全：正常 UI 已禁止在逆解析中保存；这里继续覆盖旧草稿恢复、异常生命周期和
+  // 程序化调用。如果有坐标却没有结构化地区，提交前重新向腾讯位置服务解析，绝不让
+  // place 冒充 province/city/district 写入正式记录。
+  async ensureSnapshotRegion(ctx, snap) {
+    const hasCoord = typeof snap.lat === 'number' && typeof snap.lng === 'number';
+    if (!hasCoord || snap.locationSource === 'manual' || hasStructuredRegion(snap)) return;
+    let region = null;
+    try {
+      region = await request.callFunction('geoResolve', {
+        lat: snap.lat,
+        lng: snap.lng,
+        fallbackPlace: snap.place
+      });
+    } catch (err) {
+      const e = new Error('暂时无法识别实际地区，请重新选择位置或手动填写地区');
+      e.locationResolveFailed = true;
+      throw e;
+    }
+    this.throwIfCancelled(ctx);
+    if (!hasStructuredRegion(region)) {
+      const e = new Error('暂时无法识别实际地区，请重新选择位置或手动填写地区');
+      e.locationResolveFailed = true;
+      throw e;
+    }
+    ['address', 'province', 'city', 'district', 'adcode', 'cityLabel'].forEach((field) => {
+      snap[field] = String((region && region[field]) || '').trim();
+    });
+    const stored = drafts.get(ctx && ctx.draftId);
+    if (stored) {
+      Object.assign(stored, {
+        address: snap.address,
+        province: snap.province,
+        city: snap.city,
+        district: snap.district,
+        adcode: snap.adcode,
+        cityLabel: snap.cityLabel
+      });
+      drafts.upsert(stored);
+      refreshTimeline();
+      refreshDraftDetail(ctx.draftId);
+    }
+  },
+
   // 草稿链主体：文本预检 -> 上传隔离区 -> 送审/轮询 -> commitSave；与编辑链同序但全程持快照
   async runDraftSave(ctx, snap) {
+    await this.ensureSnapshotRegion(ctx, snap);
     const texts = [];
     if (snap.place) texts.push({ field: 'place', content: snap.place });
     if (snap.note) texts.push({ field: 'note', content: snap.note });
@@ -418,6 +473,7 @@ module.exports = {
   // 编辑链主体：文本预检 -> 上传隔离区 -> 送审/轮询 -> commitEdit（+回读确认）；
   // 与草稿链同序，但提交走 commitEdit（带 footprintId/removedKeys，旧照片传 key）
   async runEditSave(ctx, snap) {
+    await this.ensureSnapshotRegion(ctx, snap);
     // 1) 文本预检：仅被修改的文本（FR-13：预设标签/日期不重审）；服务端 commit 会终审
     const origin = snap.origin || {};
     const texts = [];

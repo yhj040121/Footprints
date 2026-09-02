@@ -17,6 +17,17 @@ global.wx = {
   setStorageSync(key, value) { storage[key] = value; },
   removeStorageSync(key) { delete storage[key]; },
   cloud: {
+    callFunction({ name, data }) {
+      if (name === 'geoResolve') {
+        return Promise.resolve({ result: { code: 0, message: '', data: {
+          place: data.fallbackPlace,
+          address: '浙江省杭州市临安区青山湖街道',
+          province: '浙江省', city: '杭州市', district: '临安区',
+          adcode: '330112', cityLabel: '杭州', lat: data.lat, lng: data.lng
+        } } });
+      }
+      return Promise.resolve({ result: { code: 0, message: '', data: null } });
+    },
     database() {
       return {
         collection() { return chain; },
@@ -50,6 +61,10 @@ let timelinePage = null;
 global.Page = (definition) => { timelinePage = definition; };
 require('../miniprogram/pages/timeline/timeline');
 delete global.Page;
+let detailPage = null;
+global.Page = (definition) => { detailPage = definition; };
+require('../miniprogram/pages/detail/detail');
+delete global.Page;
 
 (async () => {
   const recent = {
@@ -77,6 +92,24 @@ delete global.Page;
   const detail = await db.getFootprint(recent._id, { force: true });
   assert.strictEqual(detail && detail._id, recent._id);
   assert.strictEqual(detail.address, recent.address);
+
+  // 已经入库但地区字段缺失的坐标记录，详情必须重新按腾讯逆解析补全，不能用 place 冒充地区。
+  const missingRegion = Object.assign({}, recent, {
+    _id: 'fp_missing_region',
+    place: '青山智汇城',
+    address: '', province: '', city: '', district: '', adcode: '', cityLabel: ''
+  });
+  const detailContext = Object.assign({}, detailPage, {
+    data: Object.assign({}, detailPage.data, { photoCount: 0 }),
+    _loadSeq: 7,
+    setData(patch) { Object.assign(this.data, patch); }
+  });
+  await detailContext.resolveMissingRegion(missingRegion, 7);
+  assert.strictEqual(detailContext.data.fp.place, '青山智汇城');
+  assert.strictEqual(detailContext.data.fp.province, '浙江省');
+  assert.strictEqual(detailContext.data.fp.city, '杭州市');
+  assert.strictEqual(detailContext.data.fp.district, '临安区');
+  assert.strictEqual(detailContext.data.regionText, '浙江 · 杭州 · 临安');
 
   const firstPage = await db.listFootprintsPage(0, 20, { force: true });
   assert.strictEqual(firstPage.list.length, 1);
@@ -147,6 +180,7 @@ delete global.Page;
 
   let payload = null;
   await save.runEditSave.call({
+    ensureSnapshotRegion() {},
     throwIfCancelled() {},
     commitEditSnap(next) { payload = next; return Promise.resolve(true); },
     issueAndUpload() { throw new Error('不应上传旧照片'); },

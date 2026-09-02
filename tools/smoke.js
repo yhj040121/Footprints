@@ -460,6 +460,14 @@ const hash = (a, b) => crypto.createHash('sha256').update(`${a}:${b}`).digest('h
   assert('commitSave 单个 tag >6 字 → 1001', tTooLong.code === 1001, tTooLong);
   const tNoPreset = await call(secCheckMain, { action: 'commitSave', ...baseSave, tags: ['山水'] });
   assert('commitSave 旧预设标签（非 customTags）→ 1001，无预设豁免', tNoPreset.code === 1001, tNoPreset);
+  const missingCurrentRegion = await call(secCheckMain, {
+    action: 'commitSave',
+    ...baseSave,
+    clientSaveId: '66666666-2222-4333-8444-555555555555',
+    address: '', province: '', city: '', district: '', adcode: '', cityLabel: '',
+    tags: [], photos: []
+  });
+  assert('实时定位有坐标但无腾讯结构化地区 → 1001（禁止错误入库）', missingCurrentRegion.code === 1001, missingCurrentRegion);
   const c1 = await call(secCheckMain, { action: 'commitSave', ...baseSave });
   const fid = hash(openid, CID);
   assert('commitSave 转正 + 确定性 _id', c1.code === 0 && c1.data.footprintId === fid, c1);
