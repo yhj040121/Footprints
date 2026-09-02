@@ -193,6 +193,22 @@ delete global.Page;
   assert.strictEqual(payload.province, recent.province);
   assert.strictEqual(payload.locationSource, recent.locationSource);
 
+  // 旧记录只有坐标、没有 V1.3 地区字段时，编辑备注不应触发腾讯解析或失败恢复；
+  // 只有真正重新选点（locationDirty=true）才进入补全分支。
+  const legacyEditSnap = Object.assign({}, snap, {
+    lat: recent.lat,
+    lng: recent.lng,
+    address: '', province: '', city: '', district: '', adcode: '', cityLabel: '',
+    locationSource: 'current',
+    locationDirty: false,
+    origin: Object.assign({}, snap.origin, { lat: recent.lat, lng: recent.lng })
+  });
+  await save.ensureSnapshotRegion.call({ throwIfCancelled() {} }, {
+    editId: recent._id,
+    draftId: ''
+  }, legacyEditSnap);
+  assert.strictEqual(legacyEditSnap.province, '', '未改变位置的旧记录编辑不得被地区服务阻断');
+
   // 编辑落定必须主动刷新时间线、地图与当前详情。
   const calls = { timeline: 0, map: 0, detail: 0 };
   const mapPage = { route: 'pages/map/map', loadRecords(keepView) { assert.strictEqual(keepView, true); calls.map++; } };

@@ -576,7 +576,7 @@ var require_validate = __commonJS({
       if (adcode && !/^[0-9A-Za-z-]+$/.test(adcode)) throw new BizError2(1001);
       const locationSource = optionalText("locationSource", 10);
       if (locationSource && !["current", "choose", "legacy", "manual"].includes(locationSource)) throw new BizError2(1001);
-      if (hasLat && (locationSource === "current" || locationSource === "choose") && ![province, city, district, adcode, cityLabel].some(Boolean)) {
+      if (oldTags == null && hasLat && (locationSource === "current" || locationSource === "choose") && ![province, city, district, adcode, cityLabel].some(Boolean)) {
         throw new BizError2(1001);
       }
       const note = event.note === void 0 || event.note === null ? "" : event.note;

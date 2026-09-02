@@ -291,6 +291,14 @@ module.exports = {
   async ensureSnapshotRegion(ctx, snap) {
     const hasCoord = typeof snap.lat === 'number' && typeof snap.lng === 'number';
     if (!hasCoord || snap.locationSource === 'manual' || hasStructuredRegion(snap)) return;
+    // 旧记录可能只有坐标、没有 V1.3 地区字段。编辑备注/日期等非位置内容时必须沿用
+    // 原记录，不能因为历史字段缺失而强制依赖腾讯服务；只有编辑时重新选了坐标才补解析。
+    if (ctx && ctx.editId && !snap.locationDirty) return;
+    const origin = snap.origin || {};
+    const sameOriginCoordinates = ctx && ctx.editId &&
+      typeof origin.lat === 'number' && typeof origin.lng === 'number' &&
+      origin.lat === snap.lat && origin.lng === snap.lng;
+    if (sameOriginCoordinates) return;
     let region = null;
     try {
       region = await request.callFunction('geoResolve', {
@@ -434,9 +442,12 @@ module.exports = {
       adcode: this.data.adcode || '',
       cityLabel: this.data.cityLabel || '',
       locationSource: this.data.locationSource || '',
+      locationDirty: !!this._locationDirty,
       // 标签体系下架（S8）：编辑保留原记录标签（原样回传，服务端豁免存量）
       tags: (this._origin && this._origin.tags) || [],
       origin: this._origin ? {
+        lat: typeof this._origin.lat === 'number' ? this._origin.lat : null,
+        lng: typeof this._origin.lng === 'number' ? this._origin.lng : null,
         place: this._origin.place,
         note: this._origin.note || '',
         tags: (this._origin.tags || []).slice(),

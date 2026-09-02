@@ -59,6 +59,7 @@ Page(Object.assign({
     this._lat = null;
     this._lng = null;
     this._locatedPlace = null;  // 选点回填的地点文字（手动改写即清坐标，FR-04）
+    this._locationDirty = false; // 编辑时仅重新选点/清坐标才视为位置变更
     this._origin = null;        // 编辑模式原始记录（变更文本比对，FR-13）
     this._removedKeys = [];
     this._clientSaveId = null;
@@ -159,6 +160,7 @@ Page(Object.assign({
       this._lat = null;
       this._lng = null;
       this._locatedPlace = null;
+      if (this.data.isEdit) this._locationDirty = true;
       patch.hasCoord = false;
     }
     this.setData(patch);
@@ -248,6 +250,7 @@ Page(Object.assign({
   // 统一入口：拿到坐标 + 系统推荐地点名 → 调 geoResolve 补省市区；解析失败保留坐标手动补地区
   resolveLocation(lat, lng, fallbackPlace, source) {
     this.markDirty();
+    if (this.data.isEdit) this._locationDirty = true;
     this._lat = lat;
     this._lng = lng;
     const place = (fallbackPlace || '').slice(0, constants.MAX_PLACE_LEN);
@@ -441,6 +444,7 @@ Page(Object.assign({
       }
       this._origin = fp;
       this._removedKeys = [];
+      this._locationDirty = false;
       this._clientSaveId = null;
       this._lat = typeof fp.lat === 'number' ? fp.lat : null;
       this._lng = typeof fp.lng === 'number' ? fp.lng : null;
@@ -505,6 +509,7 @@ Page(Object.assign({
     drafts.remove(id); // 接管该草稿（下次保存按新草稿落盘；避免「恢复-保存」后旧草稿残留）
     this._origin = null;
     this._removedKeys = [];
+    this._locationDirty = false;
     this._clientSaveId = d.clientSaveId || null; // 沿用幂等 id（成功半途时可回读原结果）
     this._formDirty = true; // 用户改动后再保存会换新 clientSaveId
     this._lat = typeof d.lat === 'number' ? d.lat : null;
@@ -585,6 +590,7 @@ Page(Object.assign({
       createdAt: origin.createdAt
     };
     this._removedKeys = d.removedKeys || [];
+    this._locationDirty = false;
     this._clientSaveId = d.clientSaveId || null; // 沿用幂等 id（成功半途时可回读原结果）
     this._formDirty = true; // 用户改动后再保存会换新 clientSaveId
     this._lat = typeof d.lat === 'number' ? d.lat : null;
@@ -679,6 +685,7 @@ Page(Object.assign({
     this._lat = null;
     this._lng = null;
     this._locatedPlace = null;
+    this._locationDirty = false;
     this._origin = this.data.isEdit ? this._origin : null;
     this._removedKeys = [];
     this._clientSaveId = null;
