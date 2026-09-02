@@ -10,7 +10,7 @@ const db = require('../../utils/db');
 const drafts = require('../../utils/drafts');
 const errorText = require('../../utils/error-text');
 
-/** 后台草稿链落定（成功删除/失败标记）后刷新时间线（若其在页面栈中） */
+/** 后台草稿链落定（成功转正式/失败标记）后刷新时间线（若其在页面栈中） */
 function refreshTimeline() {
   try {
     const pages = getCurrentPages() || [];
@@ -20,6 +20,21 @@ function refreshTimeline() {
       }
     });
   } catch (e) { /* 栈不可用时由 timeline onShow 兜底刷新 */ }
+}
+
+/** 新增草稿详情已经打开时，原地刷新审核状态；成功后无缝切到正式记录 ID。 */
+function refreshDraftDetail(draftId, footprintId) {
+  try {
+    const pages = getCurrentPages() || [];
+    pages.forEach((page) => {
+      if (!page || page.route !== 'pages/detail/detail' || page.draftId !== draftId) return;
+      if (footprintId && typeof page.onDraftPublished === 'function') {
+        page.onDraftPublished(footprintId);
+      } else if (typeof page.loadDraftDetail === 'function') {
+        page.loadDraftDetail();
+      }
+    });
+  } catch (e) { /* 详情页不在栈中时由草稿落盘状态兜底 */ }
 }
 
 /** 新增/编辑正式落定后，主动刷新当前页面栈中的日历、地图、导出与我的统计。 */
@@ -313,13 +328,16 @@ module.exports = {
     return result;
   },
 
-  // 草稿链成功：删草稿、刷新时间线（正式记录出现）；无弹层（保存瞬间的 toast 已给过反馈）
+  // 草稿链成功：保留短期 draftId -> footprintId 映射，刷新时间线并让已打开的草稿详情
+  // 原地切到正式记录。映射由 drafts 在十分钟后自动清理，覆盖「点卡片与刷新交错」的竞态窗口。
   finishDraft(ctx, result) {
-    drafts.remove(ctx.draftId);
+    const footprintId = result && result.footprintId;
+    if (!drafts.markPublished(ctx.draftId, footprintId)) drafts.remove(ctx.draftId);
     db.invalidateFootprintsCache();
     draftCleanup.forEachPhotoCleanup(this, ctx); // 清本链轮询时间记录（见底部工具函数）
     refreshTimeline();
-    refreshOtherDataPages(result && result.footprintId);
+    refreshOtherDataPages(footprintId);
+    refreshDraftDetail(ctx.draftId, footprintId);
   },
 
   // 草稿链失败：草稿标 failed + 原因落盘，时间线显示「未同步」，轻提示一次（不弹层打断）
@@ -339,6 +357,7 @@ module.exports = {
     console.error('[Footprints] draft publish failed:', err && err.code, draft.error, err && err.data);
     wx.showToast({ title: draft.error, icon: 'none', duration: 4000 });
     refreshTimeline();
+    refreshDraftDetail(ctx.draftId);
   },
 
   // ---------- 编辑链（乐观后台，全程持快照；语义与同步版一致） ----------

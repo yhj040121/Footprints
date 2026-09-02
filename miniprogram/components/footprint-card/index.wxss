@@ -100,6 +100,12 @@
   border-radius: var(--radius-full);
 }
 
+.draft-badge--syncing {
+  color: #6E654F;
+  background: rgba(145, 126, 82, 0.09);
+  border-color: rgba(145, 126, 82, 0.22);
+}
+
 .card-arrow {
   position: absolute;
   z-index: 1;

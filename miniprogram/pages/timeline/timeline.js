@@ -266,13 +266,9 @@ Page({
     const item = this.data.list.find((it) => it._id === id);
     const draft = drafts.get(id);
     if (e.detail.isDraft || (item && item.isDraft) || draft) {
-      const status = (draft && draft.status) || (item && item.draftStatus) || 'syncing';
-      if (status === 'syncing') {
-        wx.showToast({ title: '正在发布，请稍候', icon: 'none' });
-        return;
-      }
-      getApp().globalData.restoreDraftId = id;
-      wx.switchTab({ url: '/pages/add/add' });
+      // 发布后的卡片始终可以进入详情：同步中/失败展示本地快照，成功映射则由详情页
+      // 无缝切到正式 footprintId。这里不再用「正在发布」拦截，也不直接跳回编辑页。
+      wx.navigateTo({ url: '/pages/detail/detail?draftId=' + encodeURIComponent(id) });
       return;
     }
     if (item && item.editDraftId && item.draftStatus === 'failed') {

@@ -15,7 +15,10 @@
       <text class="place-text">{{record.place}}</text>
     </view>
     <view class="note">{{record.note}}</view>
-    <view wx:if="{{record.draftStatus === 'failed'}}" class="draft-badge">
+    <view wx:if="{{record.draftStatus === 'syncing'}}" class="draft-badge draft-badge--syncing">
+      <text>审核中 · 内容仅自己可见</text>
+    </view>
+    <view wx:elif="{{record.draftStatus === 'failed'}}" class="draft-badge">
       <text>{{record.draftError || '未保存成功'}} · 点击处理</text>
     </view>
   </view>

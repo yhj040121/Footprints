@@ -74,6 +74,37 @@ function emptyPhotoPatch() {
   };
 }
 
+// 发布完成前，详情直接使用保存瞬间落盘的本地快照；正式库里此时本来就不应有记录。
+function draftToFootprint(draft) {
+  return {
+    _id: draft.id,
+    date: draft.date,
+    place: draft.place,
+    lat: typeof draft.lat === 'number' ? draft.lat : null,
+    lng: typeof draft.lng === 'number' ? draft.lng : null,
+    address: draft.address || '',
+    province: draft.province || '',
+    city: draft.city || '',
+    district: draft.district || '',
+    adcode: draft.adcode || '',
+    cityLabel: draft.cityLabel || '',
+    locationSource: draft.locationSource || '',
+    note: draft.note || '',
+    tags: (draft.tags || []).slice(),
+    photos: (draft.photos || []).map((photo) => (photo.isOld ? {
+      key: photo.key,
+      width: photo.width,
+      height: photo.height
+    } : {
+      key: '',
+      url: photo.tempFilePath || '',
+      width: photo.width,
+      height: photo.height
+    })),
+    createdAt: draft.createdAt || Date.now()
+  };
+}
+
 // 乐观删除状态变化后刷新仍在页面栈中的数据页；不在栈中的页面由各自 onShow 兜底。
 function refreshDataPages() {
   try {
@@ -121,16 +152,26 @@ Page({
     deleting: false,
     editFailed: false,
     editDraftId: '',
-    editError: ''
+    editError: '',
+    isLocalDraft: false,
+    publishState: '',
+    publishStatusTitle: '',
+    publishStatusText: '',
+    publishStatusAction: ''
   },
 
   onLoad(options) {
-    this.fpId = options && options.id;
+    this.fpId = (options && options.id) || '';
+    this.draftId = (options && options.draftId) || '';
     this.loadedOnce = false;
     this._photoVersion = 0;
     this._layoutVersion = 0;
     this._loadSeq = 0; // loadDetail 轮次（S10：延迟重查与并发加载交错时丢弃旧结果）
     this._photoItems = [];
+    if (this.draftId) {
+      this.loadDraftDetail();
+      return;
+    }
     if (!this.fpId) {
       this.setData(Object.assign({ loading: false, notFound: true }, emptyPhotoPatch()));
       return;
@@ -140,7 +181,9 @@ Page({
 
   onShow() {
     // 编辑返回后刷新：重新取记录并重签 URL（签名 URL 1 小时过期，契约 §3.3 重进重签）。
-    if (this.loadedOnce) this.loadDetail();
+    if (!this.loadedOnce) return;
+    if (this.draftId) this.loadDraftDetail();
+    else this.loadDetail();
   },
 
   onUnload() {
@@ -170,27 +213,7 @@ Page({
           this.setData(Object.assign({ loading: false, notFound: true, fp: null }, emptyPhotoPatch()));
           return;
         }
-        const displayFp = this.mergeEditDraftPhotos(fp);
-        const photoCount = Math.min((displayFp.photos || []).length, photoLayout.MAX_DETAIL_PHOTOS);
-        const regionText = buildRegionText(displayFp);
-        const belongingText = buildBelongingText(displayFp);
-        const auxiliaryParts = [];
-        if (photoCount) auxiliaryParts.push(photoCount + ' 张照片');
-        if (belongingText) auxiliaryParts.push('足迹归属：' + belongingText);
-        this.setData({
-          loading: false,
-          notFound: false,
-          fp,
-          dateText: formatDotDate(fp.date),
-          regionText,
-          belongingText,
-          auxiliaryText: auxiliaryParts.join(' · '),
-          photoCount,
-          photoCountText: photoCount + ' 张',
-          hasCoordinates: hasValidCoordinates(fp)
-        });
-        this.refreshEditDraftBadge();
-        this.signPhotos(displayFp);
+        this.applyFootprint(fp);
       })
       .catch((err) => {
         if (seq !== this._loadSeq) return;
@@ -207,7 +230,92 @@ Page({
   },
 
   onRetryLoad() {
+    if (this.draftId) this.loadDraftDetail();
+    else this.loadDetail({ force: true });
+  },
+
+  // 本地草稿无需等待网络：地点、文字和临时照片同步渲染。失败时仍保留全部内容，
+  // 让用户先查看，再从提示条进入修改；成功映射存在时直接切正式详情。
+  loadDraftDetail() {
+    const draft = drafts.get(this.draftId);
+    if (draft && draft.status === 'published' && draft.footprintId) {
+      this.onDraftPublished(draft.footprintId);
+      return;
+    }
+    if (!draft) {
+      this.loadedOnce = true;
+      this._photoVersion += 1;
+      this._photoItems = [];
+      this.setData(Object.assign({
+        loading: false,
+        notFound: true,
+        networkError: false,
+        fp: null,
+        isLocalDraft: false
+      }, emptyPhotoPatch()));
+      return;
+    }
+    const failed = draft.status === 'failed';
+    this.loadedOnce = true;
+    this.applyFootprint(draftToFootprint(draft), {
+      localDraft: true,
+      publishState: failed ? 'failed' : 'syncing',
+      publishStatusTitle: failed ? '发布未通过' : '内容审核中',
+      publishStatusText: failed
+        ? ((draft.error || '内容未通过审核') + '，请修改内容后重新发布。')
+        : '当前内容已保存在本机，审核通过后才会正式发布。',
+      publishStatusAction: failed ? '修改内容' : ''
+    });
+  },
+
+  // 后台审核/提交成功时由 add 保存链调用；recentWrites 已在此前写好，所以这里即使
+  // 客户端数据库尚未可见，也会立即得到同一份内容，不再出现「加载后无记录」。
+  onDraftPublished(footprintId) {
+    if (!footprintId) return;
+    this.fpId = footprintId;
+    this.draftId = '';
+    this.setData({
+      isLocalDraft: false,
+      publishState: '',
+      publishStatusTitle: '',
+      publishStatusText: '',
+      publishStatusAction: ''
+    });
     this.loadDetail({ force: true });
+  },
+
+  applyFootprint(fp, options) {
+    const opts = options || {};
+    const displayFp = opts.localDraft ? fp : this.mergeEditDraftPhotos(fp);
+    const photoCount = Math.min((displayFp.photos || []).length, photoLayout.MAX_DETAIL_PHOTOS);
+    const regionText = buildRegionText(displayFp);
+    const belongingText = buildBelongingText(displayFp);
+    const auxiliaryParts = [];
+    if (photoCount) auxiliaryParts.push(photoCount + ' 张照片');
+    if (belongingText) auxiliaryParts.push('足迹归属：' + belongingText);
+    this.setData({
+      loading: false,
+      notFound: false,
+      networkError: false,
+      fp: opts.localDraft ? displayFp : fp,
+      dateText: formatDotDate(displayFp.date),
+      regionText,
+      belongingText,
+      auxiliaryText: auxiliaryParts.join(' · '),
+      photoCount,
+      photoCountText: photoCount + ' 张',
+      hasCoordinates: hasValidCoordinates(displayFp),
+      editFailed: opts.localDraft ? false : this.data.editFailed,
+      editDraftId: opts.localDraft ? '' : this.data.editDraftId,
+      editError: opts.localDraft ? '' : this.data.editError,
+      isLocalDraft: !!opts.localDraft,
+      publishState: opts.publishState || '',
+      publishStatusTitle: opts.publishStatusTitle || '',
+      publishStatusText: opts.publishStatusText || '',
+      publishStatusAction: opts.publishStatusAction || ''
+    });
+    if (!opts.localDraft) this.refreshEditDraftBadge();
+    this.signPhotos(displayFp);
   },
 
   refreshEditDraftBadge() {
@@ -238,6 +346,12 @@ Page({
   onRetryEdit() {
     if (!this.data.editDraftId) return;
     getApp().globalData.restoreEditDraftId = this.data.editDraftId;
+    wx.switchTab({ url: '/pages/add/add' });
+  },
+
+  onPublishStateTap() {
+    if (this.data.publishState !== 'failed' || !this.draftId) return;
+    getApp().globalData.restoreDraftId = this.draftId;
     wx.switchTab({ url: '/pages/add/add' });
   },
 
@@ -400,19 +514,19 @@ Page({
   },
 
   onViewMap() {
-    if (!this.data.hasCoordinates || !this.data.fp) return;
+    if (this.data.isLocalDraft || !this.data.hasCoordinates || !this.data.fp) return;
     getApp().globalData.focusMapFootprintId = this.fpId;
     wx.switchTab({ url: '/pages/map/map' });
   },
 
   onEdit() {
-    if (!this.data.fp) return;
+    if (this.data.isLocalDraft || !this.data.fp) return;
     getApp().globalData.editFootprintId = this.fpId;
     wx.switchTab({ url: '/pages/add/add' });
   },
 
   onDelete() {
-    if (this.data.deleting || !this.data.fp) return;
+    if (this.data.isLocalDraft || this.data.deleting || !this.data.fp) return;
     wx.showModal({
       title: '删除这条足迹？',
       content: '删除后不可恢复，照片将一并删除。',

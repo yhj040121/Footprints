@@ -48,6 +48,17 @@
         <text class="place-title">{{fp.place}}</text>
         <text wx:if="{{regionText}}" class="region-line">{{regionText}}</text>
         <text wx:if="{{auxiliaryText}}" class="auxiliary-line">{{auxiliaryText}}</text>
+        <view
+          wx:if="{{isLocalDraft}}"
+          class="publish-state publish-state--{{publishState}}"
+          bindtap="onPublishStateTap"
+        >
+          <view class="publish-state__copy">
+            <text class="publish-state__title">{{publishStatusTitle}}</text>
+            <text class="publish-state__text">{{publishStatusText}}</text>
+          </view>
+          <text wx:if="{{publishStatusAction}}" class="publish-state__action">{{publishStatusAction}}</text>
+        </view>
         <view wx:if="{{editFailed}}" class="edit-failed-badge" bindtap="onRetryEdit">
           <text>{{editError || '修改未保存成功'}} · 点击处理</text>
         </view>
@@ -112,7 +123,7 @@
         </view>
       </view>
 
-      <button wx:if="{{hasCoordinates}}" class="map-entry" hover-class="map-entry--pressed" bindtap="onViewMap">
+      <button wx:if="{{hasCoordinates && !isLocalDraft}}" class="map-entry" hover-class="map-entry--pressed" bindtap="onViewMap">
         <image class="map-entry__icon" src="/assets/icons/location-ink.png" mode="aspectFit" />
         <view class="map-entry__copy">
           <text class="map-entry__title">在地图中查看</text>
@@ -124,7 +135,7 @@
       <view class="bottom-spacer"></view>
     </view>
 
-    <view class="action-bar">
+    <view wx:if="{{!isLocalDraft}}" class="action-bar">
       <button class="action-btn action-btn--edit" hover-class="action-btn--pressed" bindtap="onEdit">
         <image class="action-btn__icon" src="/assets/icons/edit-ink.png" mode="aspectFit" />
         <text>编辑记录</text>
@@ -132,6 +143,12 @@
       <button class="action-btn action-btn--delete" hover-class="action-btn--pressed" loading="{{deleting}}" disabled="{{deleting}}" bindtap="onDelete">
         <image class="action-btn__icon" src="/assets/icons/delete-vermilion.png" mode="aspectFit" />
         <text>删除</text>
+      </button>
+    </view>
+    <view wx:elif="{{publishState === 'failed'}}" class="action-bar action-bar--single">
+      <button class="action-btn action-btn--edit" hover-class="action-btn--pressed" bindtap="onPublishStateTap">
+        <image class="action-btn__icon" src="/assets/icons/edit-ink.png" mode="aspectFit" />
+        <text>修改内容后重新发布</text>
       </button>
     </view>
   </block>
