@@ -49,7 +49,7 @@
         <text wx:if="{{regionText}}" class="region-line">{{regionText}}</text>
         <text wx:if="{{auxiliaryText}}" class="auxiliary-line">{{auxiliaryText}}</text>
         <view
-          wx:if="{{isLocalDraft}}"
+          wx:if="{{isLocalDraft && publishState === 'failed'}}"
           class="publish-state publish-state--{{publishState}}"
           bindtap="onPublishStateTap"
         >

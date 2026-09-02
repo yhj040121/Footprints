@@ -266,11 +266,12 @@ Page({
     this.scheduleFailedDraftCleanup(draft);
     this.applyFootprint(draftToFootprint(draft), {
       localDraft: true,
-      publishState: failed ? 'failed' : 'syncing',
-      publishStatusTitle: failed ? '发布未通过' : '内容审核中',
+      // 审核进行中完全无感知；仅在失败后呈现原因与修改入口。
+      publishState: failed ? 'failed' : '',
+      publishStatusTitle: failed ? '发布未通过' : '',
       publishStatusText: failed
         ? ((draft.error || '内容未通过审核') + '，请在 3 小时内修改；到期后将自动清理。')
-        : '当前内容已保存在本机，审核通过后才会正式发布。',
+        : '',
       publishStatusAction: failed ? '修改内容' : ''
     });
   },

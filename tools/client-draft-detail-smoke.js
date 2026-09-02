@@ -96,7 +96,7 @@ function makeDetailContext(draftId) {
   const draft = makeDraft('draft_immediate');
   drafts.upsert(draft);
 
-  // 时间线不再拦截「审核中」卡片，而是进入本地草稿详情。
+  // 时间线不拦截后台审核中的卡片，而是进入本地草稿详情。
   timelineDefinition.onCardTap.call({
     data: { list: [{ _id: draft.id, isDraft: true, draftStatus: 'syncing' }] }
   }, { detail: { id: draft.id, isDraft: true } });
@@ -111,7 +111,9 @@ function makeDetailContext(draftId) {
   assert.strictEqual(detail.data.fp.note, draft.note);
   assert.strictEqual(detail.data.photoUrls === undefined, false);
   assert.strictEqual(detail.renderedPhotos[0].url, draft.photos[0].tempFilePath);
-  assert.strictEqual(detail.data.publishState, 'syncing');
+  assert.strictEqual(detail.data.publishState, '');
+  assert.strictEqual(detail.data.publishStatusTitle, '');
+  assert.strictEqual(detail.data.publishStatusText, '');
 
   // 审核失败后内容不消失，并明确引导回表单修改。
   draft.status = 'failed';
